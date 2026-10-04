@@ -10,7 +10,9 @@
 :root[data-theme=dark]{--bg:#1d2125;--card:#22272b;--ink:#dee4ea;--mute:#9fadbc;--line:#38414a;--accent:#579dff;--ok:#4bce97}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,sans-serif}
-.wrap{max-width:1280px;margin:0 auto;padding:12px 16px 32px}
+@media(min-width:900px){#main.pg-write{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}#main.pg-setup{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:1100px){#main.pg-push{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.wrap{max-width:1680px;margin:0 auto;padding:12px 16px 32px}
 h1{font-size:20px;margin:0}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px}
 #theme{padding:5px 11px}
@@ -122,6 +124,7 @@ function render(){
   $('#steps').innerHTML=[['write','Step 1','Write stories'],['copy','Step 2a','Copy to Trello'],['push','Step 2b','Push to Trello'],['report','Step 3','Review report']]
     .map(([k,a,b])=>`<button data-p="${k}" class="${page===k?'on':''}"><b>${a}</b>${b}</button>`).join('');
   document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{page=b.dataset.p;render()});
+  $('#main').className='pg-'+page;
   $('#main').innerHTML=({write:pWrite,copy:pCopy,push:pPush,report:pReport,setup:pSetup})[page]();
   bind();
 }
@@ -129,7 +132,8 @@ function render(){
 function pWrite(){
   const s=editing!==null?S.stories[editing]:{title:'',role:'',want:'',why:'',ac:'',points:'',pri:'Must',tasks:'',owner:''};
   return `
-  <div class="panel span2">
+  <div class="stack">
+  <div class="panel">
     <h2>${editing!==null?'Edit '+esc(s.id):'Add a story'}</h2>
     <label>Story title <small>short, e.g. “Log in with UNIMAS email”</small></label>
     <input id="f-title" value="${esc(s.title)}">
@@ -153,13 +157,14 @@ function pWrite(){
     </div>
     <div class="big"><button class="btn p" id="save">${editing!==null?'Save changes':'Add story'}</button>${editing!==null?'<button class="btn" id="cancel">Cancel</button>':''}</div>
   </div>
-  <div class="stack">
   <div class="panel">
     <h2>Your stories (${S.stories.length})</h2>
     ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}</div></div>
       <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('')||'<p class="mute">Nothing yet. Add your first story above.</p>'}
     ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
   </div>
+  </div>
+  <div class="stack">
   <div class="panel">
     <h2>Bulk import from text</h2>
     <p class="mute" style="margin-top:0">Paste several stories at once. Separate stories with a blank line. The first line is the title. After that, use any of these lines (all optional):</p>
@@ -172,7 +177,7 @@ ac: Given no matches, when I search, then I see “No results”
 tasks: Search box added
 tasks: 3 widget tests pass in CI</pre>
     <p class="mute">You can write the story as one “As a …, I want …, so that …” line, or as separate <code>role:</code> <code>want:</code> <code>why:</code> lines. Repeat <code>ac:</code> and <code>tasks:</code> for more lines. <code>pri:</code> is Must, Should, Could or Won't.</p>
-    <textarea id="bulk" style="min-height:110px" placeholder="Paste stories here"></textarea>
+    <textarea id="bulk" style="min-height:200px" placeholder="Paste stories here"></textarea>
     <div class="big"><button class="btn p" id="bulk-go">Import stories</button></div>
   </div>
   </div>`;
@@ -271,7 +276,7 @@ async function tr(method,path,params={}){
 async function loadBoards(){
   TB.msg='Connecting…';render();
   try{TB.boards=await tr('GET','/members/me/boards',{fields:'name',filter:'open'});TB.msg=`Connected. ${TB.boards.length} boards found.`;
-    if(T.boardId&&TB.boards.some(b=>b.id===T.boardId))await loadBoard(T.boardId);}
+    if(T.boardId&&TB.boards.some(b=>b.id===T.boardId)){await loadBoard(T.boardId);await reconcilePushed().catch(()=>{})}}
   catch(e){TB.boards=[];TB.msg='⚠ '+e.message}
   render();
 }
@@ -294,6 +299,22 @@ function memberIds(owner){
   }
   return{ids,miss};
 }
+// A story is "pushed" only while its card still exists. If the card was archived or deleted in Trello,
+// forget the link so the story can be pushed again.
+async function reconcilePushed(say=()=>{}){
+  let cleared=0;
+  for(const s of S.stories.filter(x=>x.cardId)){
+    let gone=false;
+    try{gone=(await tr('GET',`/cards/${s.cardId}`,{fields:'closed'})).closed===true}
+    catch(e){if(/^404/.test(e.message))gone=true;else throw e}
+    if(gone){
+      delete s.cardId;delete s.cardUrl;delete s.clId;delete s.checkDone;cleared++;
+      say(`↺ ${s.id}: its card was archived or deleted in Trello, so it will be created again`);
+    }
+  }
+  if(cleared)save();
+  return cleared;
+}
 // Adds the checklist for a card. After an interrupted push it reuses what is already there, so nothing is duplicated.
 async function finishChecklist(s,items,fresh){
   let id=s.clId;
@@ -311,9 +332,12 @@ async function finishChecklist(s,items,fresh){
 }
 async function pushAll(){
   const log=$('#log'),say=t=>{log.textContent+=t+'\n';log.scrollTop=log.scrollHeight};
+  const go=$('#go');go.disabled=true;go.classList.add('busy');go.textContent='Checking Trello…';log.textContent='';
+  try{await reconcilePushed(say)}
+  catch(e){TB.result={ok:false,text:'Could not check Trello: '+e.message};const k=log.textContent;render();if($('#log'))$('#log').textContent=k;return}
   const todo=S.stories.filter(s=>!s.cardId||s.checkDone===false||T.redo);
-  if(!todo.length){say('Nothing to push — all stories are already on Trello.');return}
-  TB.busy=true;TB.result=null;const go=$('#go');go.disabled=true;go.classList.add('busy');go.textContent='Starting…';log.textContent='';
+  if(!todo.length){TB.result={ok:true,text:'Nothing to push: every story already has a card in Trello.'};const k=log.textContent;render();if($('#log'))$('#log').textContent=k;return}
+  TB.busy=true;TB.result=null;go.textContent='Starting…';
   const due=S.review?new Date(S.review+'T17:00:00').toISOString():undefined;
   let created=0,finished=0,failed=null;
   try{
@@ -500,7 +524,7 @@ function bind(){
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this story?')){S.stories.splice(+b.dataset.del,1);editing=null;save();render()}});
   if($('#connect'))$('#connect').onclick=async()=>{T.key=$('#t-key').value.trim();T.token=$('#t-token').value.trim();if(!T.key||!T.token){TB.msg='Enter both the key and the token.';render();return}const cb=$('#connect');cb.classList.add('busy');cb.disabled=true;cb.textContent='Connecting…';await persistSecrets();saveT();loadBoards()};
   if($('#forget'))$('#forget').onclick=async()=>{T={};await persistSecrets();saveT();TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};render()};
-  if($('#t-board'))$('#t-board').onchange=async e=>{if(!e.target.value)return;try{await loadBoard(e.target.value)}catch(x){TB.msg='⚠ '+x.message}render()};
+  if($('#t-board'))$('#t-board').onchange=async e=>{if(!e.target.value)return;try{await loadBoard(e.target.value);await reconcilePushed().catch(()=>{})}catch(x){TB.msg='⚠ '+x.message}render()};
   if($('#t-list'))$('#t-list').onchange=e=>{T.listId=e.target.value;saveT()};
   if($('#t-member'))$('#t-member').onchange=e=>{T.memberId=e.target.value;saveT()};
   if($('#t-mk'))$('#t-mk').onchange=e=>{T.makeLabels=e.target.checked;saveT()};
