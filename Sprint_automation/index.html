@@ -271,36 +271,65 @@ function memberIds(owner){
   }
   return{ids,miss};
 }
+// Adds the checklist for a card. After an interrupted push it reuses what is already there, so nothing is duplicated.
+async function finishChecklist(s,items,fresh){
+  let id=s.clId;
+  if(!id){
+    const have=fresh?[]:await tr('GET',`/cards/${s.cardId}/checklists`,{fields:'name'});
+    id=(have.find(c=>c.name==='Checklist')||await tr('POST','/checklists',{idCard:s.cardId,name:'Checklist'})).id;
+    s.clId=id;save();
+  }
+  const names=fresh?[]:(await tr('GET',`/checklists/${id}/checkItems`,{fields:'name'})).map(i=>i.name);
+  for(const it of items){
+    const k=names.indexOf(it);
+    if(k>=0){names.splice(k,1);continue}
+    await tr('POST',`/checklists/${id}/checkItems`,{name:it});await sleep(120);
+  }
+}
 async function pushAll(){
   const log=$('#log'),say=t=>{log.textContent+=t+'\n';log.scrollTop=log.scrollHeight};
-  const todo=S.stories.filter(s=>!s.cardId||T.redo);
+  const todo=S.stories.filter(s=>!s.cardId||s.checkDone===false||T.redo);
   if(!todo.length){say('Nothing to push — all stories are already on Trello.');return}
   TB.busy=true;$('#go').disabled=true;log.textContent='';
   const due=S.review?new Date(S.review+'T17:00:00').toISOString():undefined;
+  let created=0,finished=0;
   try{
+    // If an earlier push died after Trello made a card but before we heard back, reuse it instead of duplicating it.
+    const onList=new Map();
+    if(!T.redo&&todo.some(s=>!s.cardId))
+      (await tr('GET',`/lists/${T.listId}/cards`,{fields:'name,shortUrl'})).forEach(c=>onList.set(c.name,c));
     for(const s of todo){
-      const [lname,color]=LABEL_FOR[s.pri]||LABEL_FOR.Should;
-      let lab=TB.labels.find(l=>l.name===lname);
-      if(!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
-      const p={idList:T.listId,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
-      if(due)p.due=due;if(lab)p.idLabels=lab.id;
-      const {ids,miss}=memberIds(s.owner),who=ids.length?ids:(T.memberId?[T.memberId]:[]);
-      if(who.length)p.idMembers=who.join(',');
-      if(miss.length)say(`⚠ ${s.id}: no board member matches “${miss.join(', ')}”${ids.length?'':' — used the default person'}`);
-      const card=await tr('POST','/cards',p);
-      s.cardId=card.id;s.cardUrl=card.shortUrl;save();
       const items=cardTasks(s).split('\n').filter(Boolean);
-      if(items.length){const cl=await tr('POST','/checklists',{idCard:card.id,name:'Checklist'});
-        for(const it of items){await tr('POST',`/checklists/${cl.id}/checkItems`,{name:it});await sleep(120)}}
+      const resume=s.cardId&&s.checkDone===false&&!T.redo;
+      let fresh=false;
+      if(resume){say(`↺ ${s.id}: finishing its checklist`);finished++}
+      else{
+        let card=T.redo?null:onList.get(cardTitle(s));
+        if(card)say(`↺ ${s.id}: already on Trello, reusing that card`);
+        else{
+          const [lname,color]=LABEL_FOR[s.pri]||LABEL_FOR.Should;
+          let lab=TB.labels.find(l=>l.name===lname);
+          if(!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
+          const p={idList:T.listId,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
+          if(due)p.due=due;if(lab)p.idLabels=lab.id;
+          const {ids,miss}=memberIds(s.owner),who=ids.length?ids:(T.memberId?[T.memberId]:[]);
+          if(who.length)p.idMembers=who.join(',');
+          if(miss.length)say(`⚠ ${s.id}: no board member matches “${miss.join(', ')}”${ids.length?'':' — used the default person'}`);
+          card=await tr('POST','/cards',p);fresh=true;
+        }
+        s.cardId=card.id;s.cardUrl=card.shortUrl;s.clId=undefined;s.checkDone=false;save();created++;
+      }
+      if(items.length)await finishChecklist(s,items,fresh);
+      s.checkDone=true;save();
       say(`✓ ${s.id} ${s.title}`);await sleep(150);
     }
-    say(`\nDone — ${todo.length} card(s) created.`);
-  }catch(e){say('\n⚠ Stopped: '+e.message+'\nStories already created are marked; run again to continue with the rest.')}
+    say(`\nDone — ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+'.');
+  }catch(e){say('\n⚠ Stopped: '+e.message+'\nProgress is saved. Click the button again to carry on where it stopped — nothing will be duplicated.')}
   TB.busy=false;const keep=log.textContent;render();if($('#log'))$('#log').textContent=keep;
 }
 function pPush(){
   if(!S.stories.length)return`<div class="panel"><p>Add some stories first.</p><button class="btn p" data-p="write">← Write stories</button></div>`;
-  const connected=TB.boards.length>0, pending=S.stories.filter(s=>!s.cardId).length;
+  const connected=TB.boards.length>0, pending=S.stories.filter(s=>!s.cardId).length, unfinished=S.stories.filter(s=>s.cardId&&s.checkDone===false).length;
   return `
   <div class="panel"><h2>1. Connect to Trello <small class="mute">(once)</small></h2>
     <ol class="how">
@@ -319,8 +348,8 @@ function pPush(){
     <label style="font-weight:400"><input type="checkbox" id="t-mk" ${T.makeLabels?'checked':''} style="width:auto"> Create the Must / Should / Could labels if the board doesn't have them</label>
     <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label>`:''}</div>`:''}
   ${connected&&TB.lists.length?`<div class="panel"><h2>3. Push</h2>
-    <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.</p>
-    <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>Create ${T.redo?S.stories.length:pending} card(s) in Trello</button></div>
+    <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
+    <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s) in Trello`:([pending&&`create ${pending} card(s)`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
     <pre id="log" style="min-height:40px"></pre>
     <div>${S.stories.filter(s=>s.cardUrl).map(s=>`<div class="mute">✓ ${esc(s.id)} — <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a></div>`).join('')}</div>
     <p class="mute">Later edits here don't update cards already in Trello; edit those in Trello.</p></div>`:''}`;

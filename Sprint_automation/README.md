@@ -53,7 +53,7 @@ tasks: 3 widget tests pass in CI
 ### Good to know
 
 - **Owners:** type a teammate's Trello name or @username. If nobody on the board matches, the card gets the default person you chose.
-- **No duplicates:** a story that has been pushed is remembered, so pushing again only sends new stories.
+- **No duplicates:** a story that has been pushed is remembered, so pushing again only sends new stories. If a push is interrupted (for example the connection drops), click the button again: it carries on where it stopped, finishes any half-built checklist, and reuses a card that Trello already created instead of making a second one.
 - **Edits do not sync:** changing a story here after it has been pushed does not change the Trello card. Edit those in Trello.
 - **The report follows your list names:** the Done list needs "done" in its name, and WIP limits are read from "(max 3)" in a list name.
 - **Requirements come from your client.** This tool formats and organises what you give it. Review everything before you push it.
