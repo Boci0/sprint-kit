@@ -50,4 +50,4 @@ Each release:
 
 Run the workflow manually from the Actions tab (Run workflow) to get a signed installer as a downloadable file without making a release.
 
-The installer itself is not Windows code-signed: Windows shows "Windows protected your PC" on a first install. Choose More info, then Run anyway. Updates installed from inside the app should not show it, but this has not been checked yet.
+The installer itself is not Windows code-signed: Windows shows "Windows protected your PC" on a first install. Choose More info, then Run anyway. Updates installed from inside the app do not show it: the app downloads and installs them on its own.
