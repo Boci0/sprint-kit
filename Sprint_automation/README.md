@@ -48,18 +48,22 @@ why: the benefit
 points: 3
 pri: Must
 owner: Trello name
+due: 2026-10-16
 ac: Given ..., when ..., then ...
 ac: add one line for each check
 tasks: one small task
 tasks: add one line for each task
 ```
 
-`pri:` is Must, Should, Could or Won't. Repeat `ac:` and `tasks:` for more lines. If `tasks:` is empty, the `ac:` lines become the checklist. You can also write the story as one line: `As a student, I want to search clinics, so that I can book faster`.
+`pri:` is Must, Should, Could or Won't. `due:` is optional and written YYYY-MM-DD; without it the story uses the Sprint Review date. Repeat `ac:` and `tasks:` for more lines. If `tasks:` is empty, the `ac:` lines become the checklist. You can also write the story as one line: `As a student, I want to search clinics, so that I can book faster`.
 
 **Using an AI assistant:** the Bulk import box has a **Copy template** button. Give an assistant that template and your notes, ask it to write one block per story, and paste its answer into the box. It should only use what is in your notes, and you should check every story before you push it. Add a comment on the card saying AI helped, as your course asks.
 
 ### Good to know
 
+- **Story list:** each story has **Duplicate**, **Edit**, **Delete** and up/down arrows to change the order (cards are pushed in that order). With four or more stories a search box and a priority filter appear. **Delete** can be undone for a few seconds.
+- **Lists per board:** the list menu in the Push step is remembered per board, and each story can be set to **Skip** on a board. "If a story names a list the board doesn't have" in Card options chooses between skipping it, creating the list, or using the default list.
+- **Close the sprint:** at the bottom of the Review report, **Close the sprint** archives the cards in Done (restore them from Trello's archive) and can move the unfinished cards to a list you choose. It asks first.
 - **Owners:** type a teammate's Trello name or @username. If nobody on the board matches, the card gets the default person you chose.
 - **Move cards:** after a push, the Push step lists the cards on the board. Each has a list menu to move it, and **Move all** moves every one to the list you choose. Opening the step also checks where the cards are now, so moves you made in Trello show up.
 - **No duplicates:** a story that has been pushed is remembered, so pushing again only sends new stories. Pushed stories are remembered per board, so you can push the same stories to a second board; a card with the same title on a board is reused instead of duplicated. If a push is interrupted (for example the connection drops), click the button again: it carries on where it stopped, finishes any half-built checklist, and reuses a card that Trello already created instead of making a second one.

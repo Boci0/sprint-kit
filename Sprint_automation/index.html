@@ -162,7 +162,16 @@ function ask(title,text,{ok='OK',cancel='Cancel',danger=false}={}){
     (danger&&cancel?o.querySelector('[data-r="0"]'):o.querySelector('[data-r="1"]')).focus();
   });
 }
-function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),2400)}
+let toastT;
+function toast(t){const e=$('#toast');e.textContent=t;e.style.pointerEvents='';e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),2400)}
+// A message with an Undo button that stays for 8 seconds.
+function undoToast(msg,undo){
+  const e=$('#toast'),b=document.createElement('button');
+  b.className='btn link';b.textContent='Undo';b.style.cssText='margin-left:8px;color:inherit;text-decoration:underline';
+  b.onclick=()=>{undo();e.classList.remove('on');e.style.pointerEvents=''};
+  e.textContent=msg;e.append(b);e.style.pointerEvents='auto';e.classList.add('on');
+  clearTimeout(toastT);toastT=setTimeout(()=>{e.classList.remove('on');e.style.pointerEvents=''},8000);
+}
 async function copy(t,btn,msg){
   try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}
   toast(msg||'Copied. Now paste it in Trello');if(btn){btn.classList.add('done');btn.textContent='Copied ✓'}
@@ -179,7 +188,8 @@ function cardDesc(s){
   if(ac.length){L.push('**Acceptance criteria**',...ac.map(a=>'- '+a),'')}
   L.push(`**Priority:** ${s.pri}`);
   if(s.owner)L.push(`**Owner:** ${s.owner}`);
-  if(S.review)L.push(`**Due:** sprint Review, ${fmt(S.review)}`);
+  if(s.due)L.push(`**Due:** ${fmt(s.due)}`);
+  else if(S.review)L.push(`**Due:** sprint Review, ${fmt(S.review)}`);
   return L.join('\n');
 }
 const cardTasks=s=>(lines(s.tasks).length?lines(s.tasks):lines(s.ac)).join('\n');
@@ -200,8 +210,41 @@ function render(){
   bind();
 }
 
+let fq='',fpri='';
+// The rows of "Your stories". Reordering is hidden while a search or filter is on, since the order would be unclear.
+function storyList(){
+  if(!S.stories.length)return'<p class="mute">Nothing yet. Add your first story above.</p>';
+  const q=fq.trim().toLowerCase(),filtered=!!(q||fpri),n=S.stories.length;
+  const rows=S.stories.map((x,i)=>[x,i]).filter(([x])=>(!fpri||x.pri===fpri)&&(!q||[x.id,x.title,x.owner,x.list,x.role,x.want].join(' ').toLowerCase().includes(q)));
+  if(!rows.length)return'<p class="mute">No story matches.</p>';
+  return rows.map(([x,i])=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}${x.list?' · → '+esc(x.list):''}${x.due?' · due '+esc(fmt(x.due)):''}</div></div>
+    ${filtered?'':`<button class="btn link" data-up="${i}" ${i?'':'disabled'} title="Move up" aria-label="Move up">↑</button><button class="btn link" data-down="${i}" ${i<n-1?'':'disabled'} title="Move down" aria-label="Move down">↓</button>`}
+    <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-dup="${i}">Duplicate</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('');
+}
+function refreshList(){
+  const l=$('#story-list');if(!l)return;
+  l.innerHTML=storyList();const c=$('#story-count');if(c)c.textContent=S.stories.length;bindList();
+}
+function bindList(){
+  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=+b.dataset.edit;render();scrollTo(0,0)});
+  document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{const i=+b.dataset.up;if(i>0){[S.stories[i-1],S.stories[i]]=[S.stories[i],S.stories[i-1]];if(editing===i)editing=i-1;else if(editing===i-1)editing=i;save();refreshList()}});
+  document.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>{const i=+b.dataset.down;if(i<S.stories.length-1){[S.stories[i+1],S.stories[i]]=[S.stories[i],S.stories[i+1]];if(editing===i)editing=i+1;else if(editing===i+1)editing=i;save();refreshList()}});
+  document.querySelectorAll('[data-dup]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.dup,src=S.stories[i],c=JSON.parse(JSON.stringify(src));
+    ['cardId','cardUrl','cardBoard','cardList','clId','checkDone','done','skip','listBy'].forEach(k=>delete c[k]);
+    c.id=nextId();c.title=src.title+' (copy)';
+    S.stories.splice(i+1,0,c);if(editing!==null&&editing>i)editing++;
+    save();refreshList();toast(`Duplicated as ${c.id}`);
+  });
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    const s=S.stories[+b.dataset.del];
+    if(!await ask('Delete this story?',`${s.id} ${s.title} will be removed from your list. A card already on Trello is not touched.`,{ok:'Delete',danger:true}))return;
+    const idx=S.stories.indexOf(s);S.stories.splice(idx,1);editing=null;save();refreshList();
+    undoToast(`Deleted ${s.id}.`,()=>{S.stories.splice(Math.min(idx,S.stories.length),0,s);save();refreshList()});
+  });
+}
 function pWrite(){
-  const s=editing!==null?S.stories[editing]:{title:'',role:'',want:'',why:'',ac:'',points:'',pri:'Must',tasks:'',owner:'',list:''};
+  const s=editing!==null?S.stories[editing]:{title:'',role:'',want:'',why:'',ac:'',points:'',pri:'Must',tasks:'',owner:'',list:'',due:''};
   return `
   <div class="stack">
   <div class="panel">
@@ -229,12 +272,14 @@ function pWrite(){
     <label>Trello list <small>optional, e.g. Sprint Backlog. Empty means the default list chosen in Step 2b</small></label>
     <input id="f-list" placeholder="Default list" value="${esc(s.list)}" autocomplete="off">
     ${TB.lists.length?`<div class="chips"><button class="btn" data-chip="">Default</button>${TB.lists.map(l=>`<button class="btn" data-chip="${esc(l.name)}">${esc(l.name)}</button>`).join('')}</div>`:''}
+    <label>Due date <small>optional, empty means the Sprint Review date</small></label>
+    <input id="f-due" type="date" value="${esc(s.due||'')}">
     <div class="big"><button class="btn p" id="save">${editing!==null?'Save changes':'Add story'}</button>${editing!==null?'<button class="btn" id="cancel">Cancel</button>':''}</div>
   </div>
   <div class="panel">
-    <h2>Your stories (${S.stories.length})</h2>
-    ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}${x.list?' · → '+esc(x.list):''}</div></div>
-      <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('')||'<p class="mute">Nothing yet. Add your first story above.</p>'}
+    <h2>Your stories (<span id="story-count">${S.stories.length}</span>)</h2>
+    ${S.stories.length>=4?`<div class="item" style="border-top:0;padding-top:0"><input id="f-q" placeholder="Search stories" value="${esc(fq)}" style="flex:1"><select id="f-fp" style="width:auto"><option value="">All priorities</option>${['Must','Should','Could',"Won't"].map(v=>`<option ${fpri===v?'selected':''}>${v}</option>`).join('')}</select></div>`:''}
+    <div id="story-list">${storyList()}</div>
     ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
     <div class="mute" style="margin-top:10px"><button class="btn link" id="exp">Save stories to a file</button><label class="btn link" style="margin:0;cursor:pointer">Load stories from a file<input type="file" id="imp" accept=".json" hidden></label><br>A copy of your stories only, not your Trello settings. Load it to restore them or move to another computer.</div>
     ${S.stories.length?`<div class="mute" style="margin-top:10px">Use another tool? Export as <select id="exp-fmt" style="width:auto;display:inline-block">${EXP_FORMATS.map(([k,l])=>`<option value="${k}" ${expFmt===k?'selected':''}>${l}</option>`).join('')}</select> <button class="btn link" id="exp-dl">Download</button><button class="btn link" id="exp-copy">Copy</button></div>`:''}
@@ -253,18 +298,18 @@ function pWrite(){
 
 const TEMPLATE_TEXT=[
   'Short title of the story','role: who it is for','want: what they want to do','why: the benefit',
-  'points: 3','pri: Must','owner: Trello name','list: Trello list (optional)','ac: Given ..., when ..., then ...','ac: add one line for each check',
+  'points: 3','pri: Must','owner: Trello name','list: Trello list (optional)','due: 2026-10-16 (optional, YYYY-MM-DD)','ac: Given ..., when ..., then ...','ac: add one line for each check',
   'tasks: one small task','tasks: add one line for each task'].join('\n');
 const PRI_MAP=[[/^m/i,'Must'],[/^s/i,'Should'],[/^c/i,'Could'],[/^w/i,"Won't"]];
 function parseStories(text){
   let skipped=0;
   const out=text.split(/\n\s*\n/).map(b=>b.split('\n').map(x=>x.trim()).filter(Boolean)).filter(b=>b.length).map(b=>{
-    const s={title:b[0].replace(/^title\s*:\s*/i,'').replace(/^(?:[-*•]|\d+[.)])\s+/,''),role:'',want:'',why:'',ac:'',points:'',pri:'Should',tasks:'',owner:'',list:''};
+    const s={title:b[0].replace(/^title\s*:\s*/i,'').replace(/^(?:[-*•]|\d+[.)])\s+/,''),role:'',want:'',why:'',ac:'',points:'',pri:'Should',tasks:'',owner:'',list:'',due:''};
     const ac=[],tk=[];
     b.slice(1).forEach(l=>{
       const sent=l.match(/^as an?\s+(.+?),?\s+i want\s+(.+?),?\s+so that\s+(.+)$/i);
       if(sent){s.role=sent[1];s.want=sent[2];s.why=sent[3];return}
-      const m=l.match(/^(role|want|why|benefit|points|pts|pri|priority|owner|list|ac|done|tasks?|check)\s*:\s*(.*)$/i);
+      const m=l.match(/^(role|want|why|benefit|points|pts|pri|priority|owner|list|due|ac|done|tasks?|check)\s*:\s*(.*)$/i);
       if(!m){skipped++;return}
       const k=m[1].toLowerCase(),v=m[2].trim();
       if(k==='ac'||k==='done')ac.push(v);
@@ -272,6 +317,7 @@ function parseStories(text){
       else if(k==='pri'||k==='priority'){const p=PRI_MAP.find(([re])=>re.test(v));if(p)s.pri=p[1];else skipped++}
       else if(k==='points'||k==='pts')s.points=v.replace(/\D/g,'');
       else if(k==='benefit')s.why=v;
+      else if(k==='due'){if(/^\d{4}-\d{2}-\d{2}$/.test(v))s.due=v;else if(v)skipped++}
       else s[k]=v;
     });
     s.ac=ac.join('\n');s.tasks=tk.join('\n');return s;
@@ -426,14 +472,19 @@ function memberIds(owner){
   return{ids,miss};
 }
 // Which Trello list a story goes to: its own "list" (matched by name) or the default list from Step 2b.
-// A named list the board lacks is created only if the option is on; otherwise the story is skipped (the same stories can be bound to several boards).
+// What happens to a named list the board lacks is set in Card options: skip the story (default, so one set of stories can be bound to several boards), create the list, or use the default list.
+// The list a story asked for on this board: a choice made in the Push step (kept per board) wins over the story's own list.
+const wanted=s=>{const o=s.listBy&&s.listBy[T.boardId];return o!==undefined?o:s.list};
 function listFor(s){
-  if(s.skip)return{skip:true,chosen:true};
-  const def=TB.lists.find(l=>l.id===T.listId)||TB.lists[0],want=String(s.list||'').trim().toLowerCase();
+  if(s.skip||(s.listBy&&s.listBy[T.boardId]==='__skip__'))return{skip:true,chosen:true};
+  const def=TB.lists.find(l=>l.id===T.listId)||TB.lists[0],want=String(wanted(s)||'').trim().toLowerCase();
   if(!want)return{id:def.id,name:def.name};
   const l=TB.lists.find(l=>l.name.toLowerCase()===want)||TB.lists.find(l=>l.name.toLowerCase().includes(want));
   if(l)return{id:l.id,name:l.name};
-  return T.makeLists?{make:true,name:String(s.list).trim()}:{skip:true,miss:s.list};
+  const mode=T.missing||(T.makeLists?'create':'skip');   // makeLists is the older checkbox
+  if(mode==='create')return{make:true,name:String(wanted(s)).trim()};
+  if(mode==='default')return{id:def.id,name:def.name,miss:wanted(s)};
+  return{skip:true,miss:wanted(s)};
 }
 // A story is "pushed" only while its card still exists. If the card was archived or deleted in Trello,
 // forget the link so the story can be pushed again.
@@ -441,7 +492,7 @@ function listFor(s){
 // with the same title there is reused, so going back and forth does not duplicate).
 const isPushed=s=>!!s.cardId&&(!s.cardBoard||s.cardBoard===T.boardId);
 async function reconcilePushed(say=()=>{}){
-  const mine=S.stories.filter(isPushed);
+  const mine=S.stories.filter(s=>isPushed(s)&&!s.done);
   if(!mine.length||!T.boardId)return 0;
   // One request for the whole board instead of one per card. A card missing from it was deleted or moved away.
   const have=new Map((await tr('GET',`/boards/${T.boardId}/cards`,{filter:'all',fields:'closed,idList'})).map(c=>[c.id,c]));
@@ -495,7 +546,7 @@ async function pushAll(){
   const todo=S.stories.filter(s=>!isPushed(s)||s.checkDone===false||T.redo);
   if(!todo.length){TB.result={ok:true,text:'Nothing to push: every story already has a card in Trello.'};const k=log.textContent;render();if($('#log'))$('#log').textContent=k;return}
   TB.busy=true;TB.result=null;go.textContent='Starting…';
-  const due=S.review?new Date(S.review+'T17:00:00').toISOString():undefined;
+  const dueOf=s=>{const d=s.due||S.review;return d?new Date(d+'T17:00:00').toISOString():undefined};
   let created=0,finished=0,skipped=0,failed=null;
   try{
     // If an earlier push died after Trello made a card but before we heard back, reuse it instead of duplicating it.
@@ -521,13 +572,13 @@ async function pushAll(){
           if(dest.make){const nl=await tr('POST','/lists',{name:dest.name,idBoard:T.boardId,pos:'bottom'});TB.lists.push(nl);say(`Created list “${nl.name}”`);dest={id:nl.id,name:nl.name}}
           if(dest.miss)say(`⚠ ${s.id}: no list called “${dest.miss}”, so it goes to ${dest.name}`);
           const p={idList:dest.id,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
-          if(due)p.due=due;if(lab)p.idLabels=lab.id;
+          const due=dueOf(s);if(due)p.due=due;if(lab)p.idLabels=lab.id;
           const {ids,miss}=memberIds(s.owner),who=ids.length?ids:(T.memberId?[T.memberId]:[]);
           if(who.length)p.idMembers=who.join(',');
           if(miss.length)say(`⚠ ${s.id}: no board member matches “${miss.join(', ')}”${ids.length?'':', so the default person was used'}`);
           card=await tr('POST','/cards',p);fresh=true;
         }
-        s.cardId=card.id;s.cardUrl=card.shortUrl;s.cardBoard=T.boardId;if(dest)s.cardList=dest.name;s.clId=undefined;s.checkDone=false;save();created++;
+        delete s.done;s.cardId=card.id;s.cardUrl=card.shortUrl;s.cardBoard=T.boardId;if(dest)s.cardList=dest.name;s.clId=undefined;s.checkDone=false;save();created++;
       }
       if(items.length)await finishChecklist(s,items,fresh);
       s.checkDone=true;save();
@@ -547,13 +598,13 @@ function pPush(){
   const byList=new Map();toMake.forEach(s=>{const d=listFor(s),k=d.make?d.name+' (new)':d.name;if(!d.skip)byList.set(k,(byList.get(k)||0)+1)});
   const skipN=toMake.filter(s=>listFor(s).skip).length,ready=Math.max(0,pending-(T.redo?0:skipN));
   const defList=TB.lists.find(l=>l.id===T.listId)||TB.lists[0]||{name:''};
-  const pushedNow=S.stories.filter(s=>s.cardUrl&&isPushed(s));
+  const pushedNow=S.stories.filter(s=>s.cardUrl&&isPushed(s)&&!s.done);
   const listOpts=cur=>TB.lists.map(l=>`<option value="${l.id}" ${l.name===cur?'selected':''}>${esc(l.name)}</option>`).join('');
   const movable=pushedNow.length?`<div style="margin-top:14px"><h3 style="margin:0 0 6px;font-size:1rem">Cards on this board (${pushedNow.length})</h3>
-    <div class="item pick"><div class="grow mute">Move every card below to</div><select id="mv-all" ${TB.busy?'disabled':''}><option value="">Choose a list</option>${listOpts('')}</select><button class="btn" id="mv-all-go" ${TB.busy?'disabled':''}>Move all</button></div>
+    <div class="item pick"><div class="grow mute">Move every card below to</div><select id="mv-all" ${TB.busy?'disabled':''}><option value="">Skip (don't move)</option>${listOpts('')}</select><button class="btn" id="mv-all-go" disabled>Move all</button></div>
     ${pushedNow.map(s=>`<div class="item pick"><div class="grow">✓ <b>${esc(s.id)}</b> ${esc(s.title)} <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a></div><select data-mv="${S.stories.indexOf(s)}" ${TB.busy?'disabled':''}>${s.cardList&&!TB.lists.some(l=>l.name===s.cardList)?`<option selected>${esc(s.cardList)}</option>`:''}${listOpts(s.cardList)}</select></div>`).join('')}</div>`:'';
   const picker=toMake.length?'<div style="margin:8px 0 14px">'+toMake.map(s=>{
-    const d=listFor(s),bad=d.make||d.miss,cur=d.chosen?'__skip__':bad?String(s.list).trim():(s.list?d.name:'');
+    const d=listFor(s),bad=d.make||d.miss,cur=d.chosen?'__skip__':bad?String(wanted(s)).trim():(wanted(s)?d.name:'');
     const opts=[`<option value="" ${cur===''?'selected':''}>Default list (${esc(defList.name)})</option>`,
       ...TB.lists.map(l=>`<option value="${esc(l.name)}" ${cur===l.name?'selected':''}>${esc(l.name)}</option>`),
       `<option value="__skip__" ${cur==='__skip__'?'selected':''}>Skip this story (don't push)</option>`];
@@ -579,7 +630,8 @@ function pPush(){
     <label>Default person <small>added to cards whose story has no owner (or an owner that isn't on the board)</small></label>
     <select id="t-member"><option value="">Nobody</option>${TB.members.map(m=>`<option value="${m.id}" ${T.memberId===m.id?'selected':''}>${esc(m.fullName||m.username)}</option>`).join('')}</select>
     <label style="font-weight:400"><input type="checkbox" id="t-mk" ${T.makeLabels?'checked':''} style="width:auto"> Create the Must / Should / Could labels if the board doesn't have them</label>
-    <label style="font-weight:400"><input type="checkbox" id="t-ml" ${T.makeLists?'checked':''} style="width:auto"> Create lists that a story names but the board doesn't have <small>(off: those stories are skipped)</small></label>
+    <label>If a story names a list the board doesn't have</label>
+    <select id="t-ml">${[['skip','Skip that story (default)'],['create','Create the list'],['default','Put the card in the default list']].map(([v,l])=>`<option value="${v}" ${(T.missing||(T.makeLists?'create':'skip'))===v?'selected':''}>${l}</option>`).join('')}</select>
     <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label></div>`:''}
   ${connected&&TB.lists.length?`<div class="panel"><h2>4. Push</h2>
     <p>${pending} of ${S.stories.length} stories not on this board yet. Each becomes a card with its description, due date, priority label and checklist.${skipN?` <b>${skipN} will be skipped (no list on this board, or you chose to skip).</b>`:''}${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
@@ -650,6 +702,26 @@ function mdReport(a){
   if(a.flags.length)L.push('### Needs attention',...a.flags.map(f=>`- ${f}`),'');
   return L.join('\n');
 }
+// Archives the cards in Done and, if a list is chosen, moves the unfinished ones there. Archived cards can be restored in Trello.
+async function closeSprint(){
+  const a=analyse(),l=TB.lists.find(x=>x.id===$('#sc-list').value),parts=[];
+  if(a.doneC.length)parts.push(`archive ${a.doneC.length} card(s) in Done`);
+  if(l&&a.open.length)parts.push(`move ${a.open.length} unfinished card(s) to “${l.name}”`);
+  if(!parts.length){toast('Nothing to do');return}
+  if(!await ask('Close the sprint?','This will '+parts.join(' and ')+'. Archived cards can be restored from the archive in Trello.',{ok:'Close the sprint',danger:true}))return;
+  R.busy=true;R.msg='Closing the sprint…';render();
+  let arch=0,moved=0,failed=0;
+  for(const c of a.doneC){
+    try{await tr('PUT',`/cards/${c.id}`,{closed:true});arch++;const s=S.stories.find(x=>x.cardId===c.id);if(s)s.done=true;await sleep(120)}catch(e){failed++}
+  }
+  if(l)for(const c of a.open){
+    try{await tr('PUT',`/cards/${c.id}`,{idList:l.id,pos:'bottom'});moved++;const s=S.stories.find(x=>x.cardId===c.id);if(s)s.cardList=l.name;await sleep(120)}catch(e){failed++}
+  }
+  save();R.busy=false;
+  await loadReport();
+  R.msg=`Closed: ${arch} archived, ${moved} moved`+(failed?`, ${failed} failed`:'')+'.';
+  render();
+}
 function pReport(){
   const head=`<div class="panel wide head"><div><h2>Sprint review report</h2>
     <p class="mute" style="margin:0">Reads your Trello board and summarises the sprint for the Review. Move cards to the Done list first, as the client accepts them.</p></div>
@@ -679,6 +751,10 @@ function pReport(){
   <div class="panel"><h2>Needs attention (${a.flags.length})</h2>${a.flags.length?'<ul style="margin:0;padding-left:20px">'+a.flags.map(f=>`<li>${esc(f)}</li>`).join('')+'</ul>':'<p class="mute">No problems found.</p>'}</div>
   ${a.feedback.length?`<div class="panel"><h2>Client feedback (${a.feedback.length})</h2><ul style="margin:0;padding-left:20px">${a.feedback.map(c=>`<li>${esc(c.name)}</li>`).join('')}</ul></div>`:''}
   </div>
+  <div class="panel wide"><h2>Close the sprint</h2>
+    <p class="mute" style="margin-top:0">Archives the ${a.doneC.length} card(s) in Done (restore them from the archive in Trello) and can move the ${a.open.length} unfinished card(s) to the list you choose. Copy the report first if you need it.</p>
+    <label>Unfinished cards</label><select id="sc-list"><option value="">Leave them where they are</option>${TB.lists.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select>
+    <div class="big"><button class="btn" id="sc-go" ${R.busy||(!a.doneC.length&&!a.open.length)?'disabled':''}>Close the sprint</button></div></div>
   <div class="panel wide"><h2>Copy for your Review card or report</h2>
     <div class="big" style="margin:0"><button class="btn p" data-copy="${esc(md).replace(/\n/g,'&#10;')}">Copy as text</button><button class="btn" id="rep-dl">Download .md</button></div>
     <pre>${esc(md)}</pre></div>`;
@@ -702,8 +778,8 @@ function bind(){
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy,b,b.dataset.msg));
   document.querySelectorAll('[data-cd]').forEach(b=>b.onclick=()=>copy(cardDesc(S.stories[+b.dataset.cd]),b));
   document.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>copy(cardTasks(S.stories[+b.dataset.ct]),b));
-  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=+b.dataset.edit;render();scrollTo(0,0)});
-  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{const s=S.stories[+b.dataset.del];if(await ask('Delete this story?',`${s.id} ${s.title} will be removed from your list. A card already on Trello is not touched.`,{ok:'Delete',danger:true})){S.stories.splice(S.stories.indexOf(s),1);editing=null;save();render()}});
+  bindList();
+  if($('#f-q')){$('#f-q').oninput=e=>{fq=e.target.value;refreshList()};$('#f-fp').onchange=e=>{fpri=e.target.value;refreshList()}}
   if($('#connect'))$('#connect').onclick=async()=>{T.key=$('#t-key').value.trim();T.token=$('#t-token').value.trim();if(!T.key||!T.token){TB.msg='Enter both the key and the token.';render();return}const cb=$('#connect');cb.classList.add('busy');cb.disabled=true;cb.textContent='Connecting…';await persistSecrets();saveT();loadBoards()};
   if($('#forget'))$('#forget').onclick=async()=>{T={};await persistSecrets();saveT();TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};render()};
   if($('#t-board'))$('#t-board').onchange=async e=>{if(!e.target.value)return;try{await loadBoard(e.target.value);await reconcilePushed().catch(()=>{})}catch(x){TB.msg='⚠ '+x.message}render()};
@@ -712,14 +788,15 @@ function bind(){
   if($('#t-mk'))$('#t-mk').onchange=e=>{T.makeLabels=e.target.checked;saveT()};
   document.querySelectorAll('[data-pick]').forEach(s=>s.onchange=()=>{
     const st=S.stories[+s.dataset.pick];
-    if(s.value==='__skip__')st.skip=true;else{delete st.skip;st.list=s.value}
+    (st.listBy=st.listBy||{})[T.boardId]=s.value;delete st.skip;
     save();render()});
-  if($('#t-ml'))$('#t-ml').onchange=e=>{T.makeLists=e.target.checked;saveT();render()};
+  if($('#t-ml'))$('#t-ml').onchange=e=>{T.missing=e.target.value;delete T.makeLists;saveT();render()};
   if($('#t-redo'))$('#t-redo').onchange=e=>{T.redo=e.target.checked;saveT();render()};
   if($('#go'))$('#go').onclick=pushAll;
   document.querySelectorAll('[data-mv]').forEach(s=>s.onchange=()=>moveCards([S.stories[+s.dataset.mv]],s.value));
-  if($('#mv-all-go'))$('#mv-all-go').onclick=()=>{const v=$('#mv-all').value;if(!v){toast('Choose a list first');return}moveCards(S.stories.filter(x=>x.cardUrl&&isPushed(x)),v)};
+  if($('#mv-all-go')){$('#mv-all').onchange=e=>{$('#mv-all-go').disabled=!e.target.value||TB.busy};$('#mv-all-go').onclick=()=>{const v=$('#mv-all').value;if(v)moveCards(S.stories.filter(x=>x.cardUrl&&isPushed(x)&&!x.done),v)}}
   if($('#rep-load'))$('#rep-load').onclick=loadReport;
+  if($('#sc-go'))$('#sc-go').onclick=closeSprint;
   document.querySelectorAll('[data-rl]').forEach(c=>c.onchange=()=>{
     T.rl=[...document.querySelectorAll('[data-rl]')].filter(x=>x.checked).map(x=>x.dataset.rl);saveT();render()});
   if($('#rep-dl'))$('#rep-dl').onclick=()=>saveFile('sprint-review.md',mdReport(analyse()),'text/markdown;charset=utf-8','Report saved.');
@@ -742,7 +819,7 @@ function bind(){
   if($('#save'))$('#save').onclick=async()=>{
     const v=k=>$('#f-'+k).value.trim();
     if(!v('title')){toast('Give the story a title');$('#f-title').focus();return}
-    const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:$('#f-ac').value,points:v('points'),pri:v('pri'),tasks:$('#f-tasks').value,owner:v('owner'),list:v('list')};
+    const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:$('#f-ac').value,points:v('points'),pri:v('pri'),tasks:$('#f-tasks').value,owner:v('owner'),list:v('list'),due:v('due')};
     const same=S.stories.find((x,i)=>i!==editing&&x.title.trim().toLowerCase()===d.title.toLowerCase());
     if(same&&!await ask('Add it again?',`A story called “${same.title}” already exists as ${same.id}.`,{ok:'Add anyway'}))return;
     if(editing!==null)Object.assign(S.stories[editing],d);else S.stories.push({id:nextId(),...d});
