@@ -1,6 +1,6 @@
 [package]
 name = "sprint-kit"
-version = "0.1.3"
+version = "0.2.0"
 description = "Sprint Kit for Trello"
 edition = "2021"
 
