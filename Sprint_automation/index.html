@@ -206,7 +206,30 @@ function pCopy(){
 const TK='sprintkit.trello';
 let T=(()=>{try{return JSON.parse(localStorage.getItem(TK))||{}}catch(e){return{}}})();
 let TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};
-const saveT=()=>{try{localStorage.setItem(TK,JSON.stringify(T))}catch(e){}};
+// In the desktop app the key and token live in Windows Credential Manager, not in local storage.
+const SECURE=!!(window.__TAURI__&&window.__TAURI__.core);
+let secureOK=false;
+const inv=(c,a)=>window.__TAURI__.core.invoke(c,a);
+const saveT=()=>{try{
+  const {key,token,...rest}=T;
+  localStorage.setItem(TK,JSON.stringify(secureOK?rest:T));
+}catch(e){}};
+async function persistSecrets(){
+  if(!secureOK)return;
+  try{for(const n of['key','token'])T[n]?await inv('secret_set',{name:n,value:T[n]}):await inv('secret_delete',{name:n})}
+  catch(e){secureOK=false;TB.msg='⚠ Could not use Windows Credential Manager ('+e+'); the key stays in app storage.'}
+}
+async function initSecure(){
+  if(!SECURE)return;
+  try{
+    const stored={key:await inv('secret_get',{name:'key'}),token:await inv('secret_get',{name:'token'})};
+    const legacy=T.key||T.token;           // plaintext saved by an earlier version: move it
+    secureOK=true;
+    if(!legacy){T.key=stored.key||'';T.token=stored.token||''}
+    await persistSecrets();
+    saveT();render();
+  }catch(e){secureOK=false;TB.msg='⚠ Could not use Windows Credential Manager ('+e+'); the key stays in app storage.';render()}
+}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const LABEL_FOR={Must:['Must have','red'],Should:['Should have','orange'],Could:['Could have','green'],"Won't":["Won't (this time)",'black']};
 
@@ -285,7 +308,7 @@ function pPush(){
       <li>On that page click the <b>Token</b> link, <b>Allow</b>, and copy the token.</li>
     </ol>
     <label>API key</label><input id="t-key" value="${esc(T.key||'')}" autocomplete="off">
-    <label>Token <small>stays in this browser only; don't share it</small></label><input id="t-token" type="password" value="${esc(T.token||'')}" autocomplete="off">
+    <label>Token <small>${secureOK?'saved in Windows Credential Manager':'stays in this browser only, so keep it private'}</small></label><input id="t-token" type="password" value="${esc(T.token||'')}" autocomplete="off">
     <div class="big"><button class="btn p" id="connect">Connect</button><button class="btn link" id="forget">Forget key &amp; token</button></div>
     <p class="mute">${esc(TB.msg)}</p></div>
   ${connected?`<div class="panel"><h2>2. Choose where the cards go</h2>
@@ -407,8 +430,8 @@ function bind(){
   document.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>copy(cardTasks(S.stories[+b.dataset.ct]),b));
   document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=+b.dataset.edit;render();scrollTo(0,0)});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this story?')){S.stories.splice(+b.dataset.del,1);editing=null;save();render()}});
-  if($('#connect'))$('#connect').onclick=()=>{T.key=$('#t-key').value.trim();T.token=$('#t-token').value.trim();if(!T.key||!T.token){TB.msg='Enter both the key and the token.';render();return}saveT();loadBoards()};
-  if($('#forget'))$('#forget').onclick=()=>{T={};saveT();TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};render()};
+  if($('#connect'))$('#connect').onclick=async()=>{T.key=$('#t-key').value.trim();T.token=$('#t-token').value.trim();if(!T.key||!T.token){TB.msg='Enter both the key and the token.';render();return}await persistSecrets();saveT();loadBoards()};
+  if($('#forget'))$('#forget').onclick=async()=>{T={};await persistSecrets();saveT();TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};render()};
   if($('#t-board'))$('#t-board').onchange=async e=>{if(!e.target.value)return;try{await loadBoard(e.target.value)}catch(x){TB.msg='⚠ '+x.message}render()};
   if($('#t-list'))$('#t-list').onchange=e=>{T.listId=e.target.value;saveT()};
   if($('#t-member'))$('#t-member').onchange=e=>{T.memberId=e.target.value;saveT()};
@@ -443,6 +466,7 @@ function applyTheme(){const t=theme;
   $('#theme').textContent='Theme: '+t[0].toUpperCase()+t.slice(1)}
 $('#theme').onclick=()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%THEMES.length];try{localStorage.setItem(THEME_KEY,theme)}catch(e){}applyTheme()};
 applyTheme();
+initSecure();
 // In the desktop (Tauri) app, open external links in the default browser
 document.addEventListener('click',e=>{
   const a=e.target.closest('a[href^="http"]');
