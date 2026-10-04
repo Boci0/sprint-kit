@@ -39,6 +39,22 @@ textarea{resize:vertical;min-height:52px}
 .btn:disabled{opacity:.6;cursor:default}
 .btn.busy::before{content:'';display:inline-block;width:11px;height:11px;margin-right:8px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-1px}
 @keyframes spin{to{transform:rotate(360deg)}}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line)}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);font-weight:700}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.head>div:first-child{flex:1;min-width:260px}
+.headbtn{display:flex;align-items:center;gap:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:2px 0 12px}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.stat b{display:block;font-size:22px;line-height:1.2}
+.stat span{color:var(--mute);font-size:12px}
+.progress{height:8px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--ok)}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+@media(max-width:720px){.cols2{grid-template-columns:1fr}}
 .banner{padding:8px 10px;border-radius:6px;margin-top:10px;font-weight:600;border:1px solid}
 .banner.ok{color:var(--ok);border-color:var(--ok)}
 .banner.err{color:#c9372c;border-color:#c9372c}
@@ -429,25 +445,34 @@ function mdReport(a){
   return L.join('\n');
 }
 function pReport(){
-  const head=`<div class="panel"><h2>Sprint review report</h2>
-    <p class="mute" style="margin-top:0">Reads your Trello board and summarises the sprint for the Review. Move cards to the Done list first, as the client accepts them.</p>
-    <div class="big" style="margin:0"><button class="btn p ${R.busy?'busy':''}" id="rep-load" ${R.busy?'disabled':''}>${R.busy?'Loading…':R.cards?'Refresh from Trello':'Load from Trello'}</button></div>
-    <p class="mute">${esc(R.msg)}${R.at&&!R.msg?'Loaded '+R.at.toLocaleTimeString('en-GB'):''}</p></div>`;
+  const head=`<div class="panel wide head"><div><h2>Sprint review report</h2>
+    <p class="mute" style="margin:0">Reads your Trello board and summarises the sprint for the Review. Move cards to the Done list first, as the client accepts them.</p></div>
+    <div class="headbtn"><span class="mute">${esc(R.msg)}${R.at&&!R.msg?'Loaded '+R.at.toLocaleTimeString('en-GB'):''}</span>
+    <button class="btn p ${R.busy?'busy':''}" id="rep-load" ${R.busy?'disabled':''}>${R.busy?'Loading…':R.cards?'Refresh from Trello':'Load from Trello'}</button></div></div>`;
   if(!R.cards)return head;
   const a=analyse(),pct=a.tp?Math.round(a.dp/a.tp*100):0,md=mdReport(a);
-  const tbl=(h,rows)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</table>`;
+  const tbl=(h,rows,num=[])=>`<table><tr>${h.map((x,i)=>`<th${num.includes(i)?' class="num"':''}>${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((x,i)=>`<td${num.includes(i)?' class="num"':''}>${esc(x)}</td>`).join('')}</tr>`).join('')}</table>`;
   return head+`
-  <div class="panel"><h2>Result</h2>
-    <p style="font-size:18px;margin:0 0 4px"><b>${a.dp} of ${a.tp} points done (${pct}%)</b></p>
-    <div class="mute">${a.doneC.length} of ${a.cards.length} cards in Done · ${a.open.length} to carry over</div>
+  <div class="panel wide"><h2>Result</h2>
+    <div class="stats">
+      <div class="stat"><b>${a.dp} / ${a.tp}</b><span>points done</span></div>
+      <div class="stat"><b>${pct}%</b><span>complete</span></div>
+      <div class="stat"><b>${a.doneC.length} / ${a.cards.length}</b><span>cards in Done</span></div>
+      <div class="stat"><b>${a.open.length}</b><span>to carry over</span></div>
+    </div>
+    <div class="progress"><i style="width:${pct}%"></i></div>
     <details style="margin-top:10px"><summary class="mute" style="cursor:pointer">Which lists count as this sprint?</summary>
       ${TB.lists.map(l=>`<label style="font-weight:400;margin:6px 0 0"><input type="checkbox" style="width:auto" data-rl="${l.id}" ${a.scope.includes(l.id)?'checked':''}> ${esc(l.name)}</label>`).join('')}</details></div>
-  <div class="panel"><h2>By list</h2>${tbl(['List','Cards','Points'],a.byList.map(l=>[l.name,l.n,l.pts]))}</div>
-  <div class="panel"><h2>By owner</h2>${tbl(['Owner','Cards done / total','Points done / total'],Object.entries(a.owners).map(([o,r])=>[o,`${r.dn} / ${r.n}`,`${r.dp} / ${r.p}`]))}
-    <p class="mute">A card with two owners counts for each of them.</p></div>
-  <div class="panel wide"><h2>Carry over to the next sprint (${a.open.length})</h2>${a.open.length?tbl(['Card','List','Owner','Checklist'],a.open.map(c=>[c.name,c.list,c.owners.join(', ')||'—',c.ci.total?`${c.ci.done}/${c.ci.total}`:'—'])):'<p class="mute">Nothing — everything is done.</p>'}</div>
+  <div class="wide cols2">
+  <div class="panel"><h2>By list</h2>${tbl(['List','Cards','Points'],a.byList.map(l=>[l.name,l.n,l.pts]),[1,2])}</div>
+  <div class="panel"><h2>By owner</h2>${tbl(['Owner','Cards done','Points done'],Object.entries(a.owners).map(([o,r])=>[o,`${r.dn} / ${r.n}`,`${r.dp} / ${r.p}`]),[1,2])}
+    <p class="mute" style="margin:8px 0 0">A card with two owners counts for each of them.</p></div>
+  </div>
+  <div class="panel wide"><h2>Carry over to the next sprint (${a.open.length})</h2>${a.open.length?tbl(['Card','List','Owner','Checklist'],a.open.map(c=>[c.name,c.list,c.owners.join(', ')||'—',c.ci.total?`${c.ci.done}/${c.ci.total}`:'—']),[3]):'<p class="mute">Nothing — everything is done.</p>'}</div>
+  <div class="wide ${a.feedback.length?'cols2':''}">
   <div class="panel"><h2>Needs attention (${a.flags.length})</h2>${a.flags.length?'<ul style="margin:0;padding-left:20px">'+a.flags.map(f=>`<li>${esc(f)}</li>`).join('')+'</ul>':'<p class="mute">No problems found.</p>'}</div>
   ${a.feedback.length?`<div class="panel"><h2>Client feedback (${a.feedback.length})</h2><ul style="margin:0;padding-left:20px">${a.feedback.map(c=>`<li>${esc(c.name)}</li>`).join('')}</ul></div>`:''}
+  </div>
   <div class="panel wide"><h2>Copy for your Review card or report</h2>
     <div class="big" style="margin:0"><button class="btn p" data-copy="${esc(md).replace(/\n/g,'&#10;')}">Copy as text</button><button class="btn" id="rep-dl">Download .md</button></div>
     <pre>${esc(md)}</pre></div>`;
