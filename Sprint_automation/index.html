@@ -185,10 +185,15 @@ function cardDesc(s){
 const cardTasks=s=>(lines(s.tasks).length?lines(s.tasks):lines(s.ac)).join('\n');
 
 /* ---------- pages ---------- */
+// Opening the Push step also checks where the pushed cards are now, in case they were moved in Trello.
+function goPage(p){
+  page=p;render();
+  if(p==='push'&&T.key&&T.token&&T.boardId&&TB.lists.length&&!TB.busy)reconcilePushed().then(()=>{if(page==='push')render()}).catch(()=>{});
+}
 function render(){
   $('#steps').innerHTML=[['write','Step 1','Write stories'],['copy','Step 2a','Copy to Trello'],['push','Step 2b','Push to Trello'],['report','Step 3','Review report']]
     .map(([k,a,b])=>`<button data-p="${k}" class="${page===k?'on':''}"><b>${a}</b>${b}</button>`).join('');
-  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{page=b.dataset.p;render()});
+  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>goPage(b.dataset.p));
   $('#main').className='pg-'+page;
   $('#main').innerHTML=({write:pWrite,copy:pCopy,push:pPush,report:pReport,setup:pSetup})[page]();
   if($('#main').querySelectorAll('.panel').length>8)$('#main').classList.add('lite');
@@ -439,17 +444,33 @@ async function reconcilePushed(say=()=>{}){
   const mine=S.stories.filter(isPushed);
   if(!mine.length||!T.boardId)return 0;
   // One request for the whole board instead of one per card. A card missing from it was deleted or moved away.
-  const have=new Map((await tr('GET',`/boards/${T.boardId}/cards`,{filter:'all',fields:'closed'})).map(c=>[c.id,c.closed]));
+  const have=new Map((await tr('GET',`/boards/${T.boardId}/cards`,{filter:'all',fields:'closed,idList'})).map(c=>[c.id,c]));
   let cleared=0;
   for(const s of mine){
     if(!s.cardBoard)s.cardBoard=T.boardId;
-    if(have.get(s.cardId)!==false){
+    const c=have.get(s.cardId);
+    if(!c||c.closed!==false){
       delete s.cardId;delete s.cardUrl;delete s.cardBoard;delete s.clId;delete s.checkDone;cleared++;
       say(`↺ ${s.id}: its card was archived or deleted in Trello, so it will be created again`);
-    }
+    }else{const l=TB.lists.find(x=>x.id===c.idList);if(l)s.cardList=l.name}   // moved in Trello itself
   }
   save();
   return cleared;
+}
+// Moves the cards of the given stories to another list on the board.
+async function moveCards(stories,listId){
+  const l=TB.lists.find(x=>x.id===listId);
+  if(!l||TB.busy)return;
+  TB.busy=true;TB.result=null;render();
+  let moved=0,failed=0,last='';
+  for(const s of stories){
+    if(s.cardList===l.name)continue;
+    try{await tr('PUT',`/cards/${s.cardId}`,{idList:l.id,pos:'bottom'});s.cardList=l.name;moved++;save();await sleep(120)}
+    catch(e){failed++;last=e.message}
+  }
+  TB.busy=false;
+  TB.result=failed?{ok:false,text:`Moved ${moved}, ${failed} failed: ${last}`}:{ok:true,text:moved?`Moved ${moved} card(s) to “${l.name}”.`:`Those cards are already in “${l.name}”.`};
+  render();
 }
 // Adds the checklist for a card. After an interrupted push it reuses what is already there, so nothing is duplicated.
 async function finishChecklist(s,items,fresh){
@@ -526,6 +547,11 @@ function pPush(){
   const byList=new Map();toMake.forEach(s=>{const d=listFor(s),k=d.make?d.name+' (new)':d.name;if(!d.skip)byList.set(k,(byList.get(k)||0)+1)});
   const skipN=toMake.filter(s=>listFor(s).skip).length,ready=Math.max(0,pending-(T.redo?0:skipN));
   const defList=TB.lists.find(l=>l.id===T.listId)||TB.lists[0]||{name:''};
+  const pushedNow=S.stories.filter(s=>s.cardUrl&&isPushed(s));
+  const listOpts=cur=>TB.lists.map(l=>`<option value="${l.id}" ${l.name===cur?'selected':''}>${esc(l.name)}</option>`).join('');
+  const movable=pushedNow.length?`<div style="margin-top:14px"><h3 style="margin:0 0 6px;font-size:1rem">Cards on this board (${pushedNow.length})</h3>
+    <div class="item pick"><div class="grow mute">Move every card below to</div><select id="mv-all" ${TB.busy?'disabled':''}><option value="">Choose a list</option>${listOpts('')}</select><button class="btn" id="mv-all-go" ${TB.busy?'disabled':''}>Move all</button></div>
+    ${pushedNow.map(s=>`<div class="item pick"><div class="grow">✓ <b>${esc(s.id)}</b> ${esc(s.title)} <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a></div><select data-mv="${S.stories.indexOf(s)}" ${TB.busy?'disabled':''}>${s.cardList&&!TB.lists.some(l=>l.name===s.cardList)?`<option selected>${esc(s.cardList)}</option>`:''}${listOpts(s.cardList)}</select></div>`).join('')}</div>`:'';
   const picker=toMake.length?'<div style="margin:8px 0 14px">'+toMake.map(s=>{
     const d=listFor(s),bad=d.make||d.miss,cur=d.chosen?'__skip__':bad?String(s.list).trim():(s.list?d.name:'');
     const opts=[`<option value="" ${cur===''?'selected':''}>Default list (${esc(defList.name)})</option>`,
@@ -560,7 +586,7 @@ function pPush(){
     ${picker}
     <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s)${where||' in Trello'}`:([ready&&`create ${ready} card(s)${where}`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
     ${TB.result?`<div class="banner ${TB.result.ok?'ok':'err'}">${esc(TB.result.text)}</div>`:''}<pre id="log" style="min-height:40px"></pre>
-    <div>${S.stories.filter(s=>s.cardUrl&&isPushed(s)).map(s=>`<div class="mute">✓ ${esc(s.id)}: <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a>${s.cardList?' in '+esc(s.cardList):''}</div>`).join('')}</div>
+    ${movable}
     <p class="mute">Later edits here don't update cards already in Trello; edit those in Trello.</p></div>`:''}`;
 }
 
@@ -672,7 +698,7 @@ function pSetup(){
 
 /* ---------- events ---------- */
 function bind(){
-  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{page=b.dataset.p;render()});
+  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>goPage(b.dataset.p));
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy,b,b.dataset.msg));
   document.querySelectorAll('[data-cd]').forEach(b=>b.onclick=()=>copy(cardDesc(S.stories[+b.dataset.cd]),b));
   document.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>copy(cardTasks(S.stories[+b.dataset.ct]),b));
@@ -691,6 +717,8 @@ function bind(){
   if($('#t-ml'))$('#t-ml').onchange=e=>{T.makeLists=e.target.checked;saveT();render()};
   if($('#t-redo'))$('#t-redo').onchange=e=>{T.redo=e.target.checked;saveT();render()};
   if($('#go'))$('#go').onclick=pushAll;
+  document.querySelectorAll('[data-mv]').forEach(s=>s.onchange=()=>moveCards([S.stories[+s.dataset.mv]],s.value));
+  if($('#mv-all-go'))$('#mv-all-go').onclick=()=>{const v=$('#mv-all').value;if(!v){toast('Choose a list first');return}moveCards(S.stories.filter(x=>x.cardUrl&&isPushed(x)),v)};
   if($('#rep-load'))$('#rep-load').onclick=loadReport;
   document.querySelectorAll('[data-rl]').forEach(c=>c.onchange=()=>{
     T.rl=[...document.querySelectorAll('[data-rl]')].filter(x=>x.checked).map(x=>x.dataset.rl);saveT();render()});

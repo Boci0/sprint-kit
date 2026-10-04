@@ -61,6 +61,7 @@ tasks: add one line for each task
 ### Good to know
 
 - **Owners:** type a teammate's Trello name or @username. If nobody on the board matches, the card gets the default person you chose.
+- **Move cards:** after a push, the Push step lists the cards on the board. Each has a list menu to move it, and **Move all** moves every one to the list you choose. Opening the step also checks where the cards are now, so moves you made in Trello show up.
 - **No duplicates:** a story that has been pushed is remembered, so pushing again only sends new stories. Pushed stories are remembered per board, so you can push the same stories to a second board; a card with the same title on a board is reused instead of duplicated. If a push is interrupted (for example the connection drops), click the button again: it carries on where it stopped, finishes any half-built checklist, and reuses a card that Trello already created instead of making a second one.
 - **Edits do not sync:** changing a story here after it has been pushed does not change the Trello card. Edit those in Trello.
 - **The report follows your list names:** the Done list needs "done" in its name, and WIP limits are read from "(max 3)" in a list name.
