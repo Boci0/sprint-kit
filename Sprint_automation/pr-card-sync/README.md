@@ -26,7 +26,25 @@ The card is found from the ID (`US-07`) in the **branch name or the PR title**, 
    - `TRELLO_BOARD_ID`: shown in Sprint Kit on Step 2b once you pick a board (with a Copy button).
 4. Name branches `feature/US-07-short-name` and start PR titles with the ID: `US-07: UNIMAS login`.
 
-List names are matched by keyword, so they work with the board template in the deck: **Product Backlog**, **Sprint Backlog**, **Doing**, **Review**, **Testing** or **QA**, **Done**. If yours differ, set `LIST_DOING`, `LIST_REVIEW`, `LIST_TESTING` and so on to a matching regular expression in the workflow.
+## Your list names
+
+The job works out what each list is from its name, so the deck's template works, and so do most other boards. Some examples it understands:
+
+| Stage | Names it recognises |
+|---|---|
+| Not started (cards can move forward from here) | Product Backlog, Sprint Backlog, Backlog, To Do, Todo, Ideas, Icebox |
+| Doing | Doing, In Progress, WIP, In Development |
+| In review | Review, Code Review, In Review (PR), Pull Requests |
+| Testing | Testing, QA, UAT, Verification |
+| Done | Done, Completed, Finished, Shipped |
+
+Every run prints how it read your lists, for example `Board lists: To Do (sprint), Doing (doing), Notes (ignored)`. Lists marked `ignored` are never touched. If a stage has no list, the log says so and the card is simply not moved.
+
+**If your names are different,** say which list is which, instead of renaming anything. Add a repository **variable** called `TRELLO_LISTS` (Settings, Secrets and variables, Actions, Variables tab) with JSON like this. Each value is a list name or a list id, and you can give several in a row:
+
+    {"doing": "Hacking", "review": ["Peer check", "PR open"], "done": "Finished?"}
+
+The stages are `backlog`, `sprint`, `doing`, `review`, `testing` and `done`. A name that doesn't exist on the board makes the job fail with a clear message, so a typo can't quietly do nothing.
 
 ## Try it safely first
 
@@ -46,4 +64,4 @@ From this folder:
 
     node --test
 
-16 tests cover ID detection, every move rule, draft PRs, duplicates, missing secrets, dry runs and Trello errors, using a fake Trello board. They do not call the real Trello API.
+21 tests cover ID detection, every move rule, draft PRs, duplicates, missing secrets, dry runs and Trello errors, using a fake Trello board. They do not call the real Trello API.

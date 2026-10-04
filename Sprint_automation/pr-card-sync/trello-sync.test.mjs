@@ -165,3 +165,67 @@ test('a Trello error is thrown so the job shows red', async () => {
   const fetchImpl = async () => ({ ok: false, status: 401, text: async () => 'invalid token' });
   await assert.rejects(run({ env: ENV, eventName: 'pull_request', event: pr('opened'), fetchImpl, log }), /401/);
 });
+
+import { explicitStages } from './trello-sync.mjs';
+
+test('many common list names are recognised', () => {
+  const cases = {
+    'To Do': 'sprint', 'Todo': 'sprint', 'Backlog': 'sprint', 'Product Backlog': 'backlog', 'Ideas': 'backlog',
+    'In Progress': 'doing', 'WIP': 'doing', 'In Development': 'doing', 'Doing (max 3)': 'doing',
+    'Code Review': 'review', 'In Review (PR)': 'review', 'Ready for review': 'review', 'Pull Requests': 'review',
+    'QA': 'testing', 'Testing / QA': 'testing', 'UAT': 'testing', 'Verification': 'testing',
+    'Done': 'done', 'Completed': 'done', 'Shipped': 'done', 'Done Sprint 2': 'done',
+    'Client Feedback': null, 'Notes': null, 'Resources': null,
+  };
+  for (const [name, stage] of Object.entries(cases)) assert.equal(stageOf(name), stage, name);
+});
+
+test('default Trello lists (To Do, Doing, Done) work out of the box for the first moves', async () => {
+  const lists = [{ id: 'a', name: 'To Do' }, { id: 'b', name: 'Doing' }, { id: 'c', name: 'Done' }];
+  const writes = [];
+  const fetchImpl = async (url, o = {}) => {
+    const u = new URL(url), path = u.pathname.replace('/1', ''), m = o.method || 'GET';
+    const ok = (d) => ({ ok: true, status: 200, json: async () => d, text: async () => '' });
+    if (m === 'GET' && path === '/boards/B/lists') return ok(lists);
+    if (m === 'GET' && path === '/boards/B/cards') return ok([{ id: 'c1', idList: 'a', name: 'US-01 Login' }]);
+    writes.push([m, path, o.body ? JSON.parse(o.body) : {}]);
+    return ok({});
+  };
+  const r = await run({ env: ENV, eventName: 'create', event: { ref_type: 'branch', ref: 'feature/US-01-x' }, fetchImpl, log });
+  assert.equal(r.actions[0].moved, 'Doing');
+  assert.deepEqual(writes.filter((w) => w[0] === 'PUT').map((w) => w[2].idList), ['b']);
+});
+
+test('TRELLO_LISTS maps unusual names by name or by id', async () => {
+  const lists = [{ id: 'x1', name: 'Parking lot' }, { id: 'x2', name: 'Hacking' }, { id: 'x3', name: 'Eyes on it' }, { id: 'x4', name: 'Finished?' }];
+  const map = explicitStages('{"backlog":"parking lot","doing":"x2","review":["EYES ON IT"],"done":"Finished?"}', lists);
+  assert.equal(map.get('x1'), 'backlog'); assert.equal(map.get('x2'), 'doing');
+  assert.equal(map.get('x3'), 'review'); assert.equal(map.get('x4'), 'done');
+  const writes = [];
+  const fetchImpl = async (url, o = {}) => {
+    const u = new URL(url), path = u.pathname.replace('/1', ''), m = o.method || 'GET';
+    const ok = (d) => ({ ok: true, status: 200, json: async () => d, text: async () => '' });
+    if (m === 'GET' && path === '/boards/B/lists') return ok(lists);
+    if (m === 'GET' && path === '/boards/B/cards') return ok([{ id: 'c1', idList: 'x2', name: 'US-07 Login' }]);
+    if (m === 'GET') return ok([]);
+    writes.push([m, path, o.body ? JSON.parse(o.body) : {}]);
+    return ok({});
+  };
+  await run({ env: { ...ENV, TRELLO_LISTS: '{"backlog":"parking lot","doing":"x2","review":["EYES ON IT"],"done":"Finished?"}' }, eventName: 'pull_request', event: pr('opened'), fetchImpl, log });
+  assert.deepEqual(writes.filter((w) => w[0] === 'PUT').map((w) => w[2].idList), ['x3']);
+});
+
+test('a wrong TRELLO_LISTS fails loudly instead of doing nothing', () => {
+  const lists = [{ id: 'a', name: 'Doing' }];
+  assert.throws(() => explicitStages('not json', lists), /not valid JSON/);
+  assert.throws(() => explicitStages('{"flying":"Doing"}', lists), /not a stage/);
+  assert.throws(() => explicitStages('{"doing":"Typo list"}', lists), /no list on the board/);
+});
+
+test('the log shows how each list was understood', async () => {
+  const seen = [];
+  const b = board([[7, 'dg']]);
+  await run({ env: ENV, eventName: 'pull_request', event: pr('opened'), fetchImpl: b.fetchImpl, log: (x) => seen.push(x) });
+  const line = seen.find((l) => l.startsWith('Board lists:'));
+  assert.match(line, /Doing \(max 3\) \(doing\)/); assert.match(line, /Client Feedback \(ignored\)/);
+});

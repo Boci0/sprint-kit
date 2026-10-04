@@ -30,4 +30,4 @@ jobs:
           # Optional:
           # MERGE_BASE: develop        # only move to Testing when merged into this branch
           # DRY_RUN: "1"               # log what would happen without changing Trello
-          # LIST_REVIEW: "pull request" # regex if your list names differ (LIST_DOING, LIST_TESTING, ...)
+          TRELLO_LISTS: ${{ vars.TRELLO_LISTS }}   # optional: map unusual list names, see README
