@@ -395,12 +395,13 @@ function memberIds(owner){
   return{ids,miss};
 }
 // Which Trello list a story goes to: its own "list" (matched by name) or the default list from Step 2b.
+// A named list the board lacks is created only if the option is on; otherwise the story is skipped (the same stories can be bound to several boards).
 function listFor(s){
   const def=TB.lists.find(l=>l.id===T.listId)||TB.lists[0],want=String(s.list||'').trim().toLowerCase();
   if(!want)return{id:def.id,name:def.name};
   const l=TB.lists.find(l=>l.name.toLowerCase()===want)||TB.lists.find(l=>l.name.toLowerCase().includes(want));
   if(l)return{id:l.id,name:l.name};
-  return T.makeLists?{make:true,name:String(s.list).trim()}:{id:def.id,name:def.name,miss:s.list};
+  return T.makeLists?{make:true,name:String(s.list).trim()}:{skip:true,miss:s.list};
 }
 // A story is "pushed" only while its card still exists. If the card was archived or deleted in Trello,
 // forget the link so the story can be pushed again.
@@ -442,7 +443,7 @@ async function pushAll(){
   if(!todo.length){TB.result={ok:true,text:'Nothing to push: every story already has a card in Trello.'};const k=log.textContent;render();if($('#log'))$('#log').textContent=k;return}
   TB.busy=true;TB.result=null;go.textContent='Starting…';
   const due=S.review?new Date(S.review+'T17:00:00').toISOString():undefined;
-  let created=0,finished=0,failed=null;
+  let created=0,finished=0,skipped=0,failed=null;
   try{
     // If an earlier push died after Trello made a card but before we heard back, reuse it instead of duplicating it.
     const onList=new Map();
@@ -463,6 +464,7 @@ async function pushAll(){
           let lab=TB.labels.find(l=>l.name===lname);
           if(!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
           dest=listFor(s);
+          if(dest.skip){say(`⏭ ${s.id}: no list called “${dest.miss}” on this board, so it was not pushed`);skipped++;continue}
           if(dest.make){const nl=await tr('POST','/lists',{name:dest.name,idBoard:T.boardId,pos:'bottom'});TB.lists.push(nl);say(`Created list “${nl.name}”`);dest={id:nl.id,name:nl.name}}
           if(dest.miss)say(`⚠ ${s.id}: no list called “${dest.miss}”, so it goes to ${dest.name}`);
           const p={idList:dest.id,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
@@ -478,24 +480,24 @@ async function pushAll(){
       s.checkDone=true;save();
       say(`✓ ${s.id} ${s.title}`+(s.cardList?` → ${s.cardList}`:''));await sleep(150);
     }
-    say(`\nDone: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+'.');
+    say(`\nDone: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+(skipped?`, ${skipped} skipped (list not on this board)`:'')+'.');
   }catch(e){failed=e.message;say('\n⚠ Stopped: '+e.message+'\nProgress is saved. Click the button again to carry on where it stopped. Nothing will be duplicated.')}
   TB.busy=false;
   TB.result=failed?{ok:false,text:'Stopped: '+failed+' Progress is saved; click the button again to carry on.'}
-    :{ok:true,text:`Done: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+'.'};
+    :{ok:true,text:`Done: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+(skipped?`, ${skipped} skipped because their list is not on this board`:'')+'.'};
   const keep=log.textContent;render();if($('#log'))$('#log').textContent=keep;
 }
 function pPush(){
   if(!S.stories.length)return`<div class="panel"><p>Add some stories first.</p><button class="btn p" data-p="write">← Write stories</button></div>`;
   const connected=TB.boards.length>0, pending=S.stories.filter(s=>!s.cardId).length, unfinished=S.stories.filter(s=>s.cardId&&s.checkDone===false).length;
   const boardName=(TB.boards.find(b=>b.id===T.boardId)||{}).name||'',toMake=T.boardId&&TB.lists.length?S.stories.filter(s=>T.redo||!s.cardId):[];
-  const byList=new Map();toMake.forEach(s=>{const d=listFor(s),k=d.make?d.name+' (new)':d.name;byList.set(k,(byList.get(k)||0)+1)});
+  const byList=new Map();toMake.forEach(s=>{const d=listFor(s),k=d.make?d.name+' (new)':d.name;if(!d.skip)byList.set(k,(byList.get(k)||0)+1)});
   const defList=TB.lists.find(l=>l.id===T.listId)||TB.lists[0]||{name:''};
   const picker=toMake.length?'<div style="margin:8px 0 14px">'+toMake.map(s=>{
     const d=listFor(s),bad=d.make||d.miss,cur=bad?String(s.list).trim():(s.list?d.name:'');
     const opts=[`<option value="" ${cur===''?'selected':''}>Default list (${esc(defList.name)})</option>`,
       ...TB.lists.map(l=>`<option value="${esc(l.name)}" ${cur===l.name?'selected':''}>${esc(l.name)}</option>`)];
-    if(bad)opts.push(`<option value="${esc(cur)}" selected>${esc(cur)} ${d.make?'(new list)':'(not found, uses default)'}</option>`);
+    if(bad)opts.push(`<option value="${esc(cur)}" selected>${esc(cur)} ${d.make?'(new list)':'(not found, will be skipped)'}</option>`);
     return `<div class="item pick"><div class="grow"><b>${esc(s.id)}</b> ${esc(s.title)}</div><select data-pick="${S.stories.indexOf(s)}" ${TB.busy?'disabled':''}>${opts.join('')}</select></div>`}).join('')+'</div>':'';
   const where=byList.size?(byList.size===1?` in ${boardName?boardName+' → ':''}${[...byList.keys()][0]}`:` in ${byList.size} lists`):'';
   return `
@@ -517,7 +519,7 @@ function pPush(){
     <label>Default person <small>added to cards whose story has no owner (or an owner that isn't on the board)</small></label>
     <select id="t-member"><option value="">Nobody</option>${TB.members.map(m=>`<option value="${m.id}" ${T.memberId===m.id?'selected':''}>${esc(m.fullName||m.username)}</option>`).join('')}</select>
     <label style="font-weight:400"><input type="checkbox" id="t-mk" ${T.makeLabels?'checked':''} style="width:auto"> Create the Must / Should / Could labels if the board doesn't have them</label>
-    <label style="font-weight:400"><input type="checkbox" id="t-ml" ${T.makeLists?'checked':''} style="width:auto"> Create lists that a story names but the board doesn't have</label>
+    <label style="font-weight:400"><input type="checkbox" id="t-ml" ${T.makeLists?'checked':''} style="width:auto"> Create lists that a story names but the board doesn't have <small>(off: those stories are skipped)</small></label>
     <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label></div>`:''}
   ${connected&&TB.lists.length?`<div class="panel"><h2>4. Push</h2>
     <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
