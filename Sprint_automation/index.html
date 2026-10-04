@@ -363,7 +363,8 @@ function listFor(s){
   const def=TB.lists.find(l=>l.id===T.listId)||TB.lists[0],want=String(s.list||'').trim().toLowerCase();
   if(!want)return{id:def.id,name:def.name};
   const l=TB.lists.find(l=>l.name.toLowerCase()===want)||TB.lists.find(l=>l.name.toLowerCase().includes(want));
-  return l?{id:l.id,name:l.name}:{id:def.id,name:def.name,miss:s.list};
+  if(l)return{id:l.id,name:l.name};
+  return T.makeLists?{make:true,name:String(s.list).trim()}:{id:def.id,name:def.name,miss:s.list};
 }
 // A story is "pushed" only while its card still exists. If the card was archived or deleted in Trello,
 // forget the link so the story can be pushed again.
@@ -426,6 +427,7 @@ async function pushAll(){
           let lab=TB.labels.find(l=>l.name===lname);
           if(!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
           dest=listFor(s);
+          if(dest.make){const nl=await tr('POST','/lists',{name:dest.name,idBoard:T.boardId,pos:'bottom'});TB.lists.push(nl);say(`Created list “${nl.name}”`);dest={id:nl.id,name:nl.name}}
           if(dest.miss)say(`⚠ ${s.id}: no list called “${dest.miss}”, so it goes to ${dest.name}`);
           const p={idList:dest.id,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
           if(due)p.due=due;if(lab)p.idLabels=lab.id;
@@ -451,7 +453,7 @@ function pPush(){
   if(!S.stories.length)return`<div class="panel"><p>Add some stories first.</p><button class="btn p" data-p="write">← Write stories</button></div>`;
   const connected=TB.boards.length>0, pending=S.stories.filter(s=>!s.cardId).length, unfinished=S.stories.filter(s=>s.cardId&&s.checkDone===false).length;
   const boardName=(TB.boards.find(b=>b.id===T.boardId)||{}).name||'',toMake=T.boardId&&TB.lists.length?S.stories.filter(s=>T.redo||!s.cardId):[];
-  const byList=new Map();toMake.forEach(s=>{const d=listFor(s);byList.set(d.name,(byList.get(d.name)||0)+1)});
+  const byList=new Map();toMake.forEach(s=>{const d=listFor(s),k=d.make?d.name+' (new)':d.name;byList.set(k,(byList.get(k)||0)+1)});
   const dests=byList.size?`<br><span class="mute">Goes to: ${[...byList].map(([n,c])=>esc(n)+' ('+c+')').join(', ')}</span>`+toMake.map(s=>({s,d:listFor(s)})).filter(x=>x.d.miss).map(x=>`<br><span class="mute">⚠ ${esc(x.s.id)}: no list called “${esc(x.d.miss)}”, it will go to ${esc(x.d.name)}</span>`).join(''):'';
   const where=byList.size?(byList.size===1?` in ${boardName?boardName+' → ':''}${[...byList.keys()][0]}`:` in ${byList.size} lists`):'';
   return `
@@ -467,12 +469,15 @@ function pPush(){
   ${connected?`<div class="panel"><h2>2. Choose where the cards go</h2>
     <label>Board</label><select id="t-board"><option value="">Choose a board</option>${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
     ${T.boardId?`<div class="mute" style="margin-top:4px">Board ID: <code>${esc(T.boardId)}</code> <button class="btn link" data-copy="${esc(T.boardId)}" data-msg="Board ID copied. Paste it as the GitHub secret TRELLO_BOARD_ID.">Copy</button> for the GitHub secret TRELLO_BOARD_ID</div>`:''}
-    ${TB.lists.length?`<label>List</label><select id="t-list">${TB.lists.map(l=>`<option value="${l.id}" ${T.listId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>
+    ${TB.lists.length?`<label>Default list</label><select id="t-list">${TB.lists.map(l=>`<option value="${l.id}" ${T.listId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>`:''}</div>`:''}
+  ${connected&&TB.lists.length?`<div class="panel"><h2>3. Card options</h2>
+    <p class="mute" style="margin-top:0">A story can choose its own list with a <code>list:</code> line or the Trello list box. Stories without one use the list from step 2.</p>
     <label>Default person <small>added to cards whose story has no owner (or an owner that isn't on the board)</small></label>
     <select id="t-member"><option value="">Nobody</option>${TB.members.map(m=>`<option value="${m.id}" ${T.memberId===m.id?'selected':''}>${esc(m.fullName||m.username)}</option>`).join('')}</select>
     <label style="font-weight:400"><input type="checkbox" id="t-mk" ${T.makeLabels?'checked':''} style="width:auto"> Create the Must / Should / Could labels if the board doesn't have them</label>
-    <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label>`:''}</div>`:''}
-  ${connected&&TB.lists.length?`<div class="panel"><h2>3. Push</h2>
+    <label style="font-weight:400"><input type="checkbox" id="t-ml" ${T.makeLists?'checked':''} style="width:auto"> Create lists that a story names but the board doesn't have</label>
+    <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label></div>`:''}
+  ${connected&&TB.lists.length?`<div class="panel"><h2>4. Push</h2>
     <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${dests}${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
     <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s)${where||' in Trello'}`:([pending&&`create ${pending} card(s)${where}`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
     ${TB.result?`<div class="banner ${TB.result.ok?'ok':'err'}">${esc(TB.result.text)}</div>`:''}<pre id="log" style="min-height:40px"></pre>
@@ -600,6 +605,7 @@ function bind(){
   if($('#t-list'))$('#t-list').onchange=e=>{T.listId=e.target.value;saveT()};
   if($('#t-member'))$('#t-member').onchange=e=>{T.memberId=e.target.value;saveT()};
   if($('#t-mk'))$('#t-mk').onchange=e=>{T.makeLabels=e.target.checked;saveT()};
+  if($('#t-ml'))$('#t-ml').onchange=e=>{T.makeLists=e.target.checked;saveT();render()};
   if($('#t-redo'))$('#t-redo').onchange=e=>{T.redo=e.target.checked;saveT();render()};
   if($('#go'))$('#go').onclick=pushAll;
   if($('#rep-load'))$('#rep-load').onclick=loadReport;
