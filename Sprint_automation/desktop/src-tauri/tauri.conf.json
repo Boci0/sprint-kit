@@ -23,12 +23,26 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM1NTc2RjE4RTA2NzA0QjkKUldTNUJHZmdHRzlYeFZONkYvUGg1Q2VoT1hLTzE0U0RRZVRwdW1URlFJUWh1d1lXWHByc3BSU0MK",
+      "endpoints": [
+        "https://github.com/Boci0/sprint-kit/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

@@ -34,10 +34,10 @@ Add `DRY_RUN: "1"` to the workflow's `env:`. The job reads your board but only p
 
 ## Things to know
 
-- **Comments appear as the token's owner.** Everything the job does is attributed to whoever created the token. A shared team account, or the Scrum Master's, is better than one student's personal account.
+- **Comments appear as the token's owner.** Everything the job does shows up as coming from whoever created the token. A shared team account, or the Scrum Master's, is better than one student's personal account.
 - **Treat the token like a password.** Only add this to a repo where every collaborator is trusted: anyone who can push a branch can change the workflow or script and read the secrets.
 - **Pull requests from forks don't get secrets**, so the job skips them. That's expected.
-- **Honest activity.** Cards move only when something real happens in GitHub, which keeps the board's history truthful for assessment (deck p.24). Moves like "Testing → Done" stay with the Product Owner and the client at the Review.
+- **Only real events move cards.** A card moves only when something really happens in GitHub, so the board's history stays accurate for marking (deck p.24). Moves like "Testing → Done" stay with the Product Owner and the client at the Review.
 - **Needs Node 18+.** GitHub's `ubuntu-latest` runners include it.
 
 ## Tests

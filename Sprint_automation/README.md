@@ -12,6 +12,8 @@ Open that page and, under **Assets**, download the file ending in `x64-setup.exe
 - Windows may show **"Windows protected your PC"** because the installer is not code-signed. Click **More info**, then **Run anyway**.
 - You do not need to install Node, Rust or Git. Windows 10 and 11 already include what the app needs.
 
+**Updates:** from version 0.2.0 the app checks for a newer version when it opens and offers a one-click update. There is also a **Check for updates** link at the bottom of the window. Older installs need the new installer once.
+
 Prefer the browser? Open `index.html` in this folder. It does the same job, but stores the Trello token in the browser instead of Windows Credential Manager.
 
 ## One-time Trello setup
@@ -36,19 +38,25 @@ You can skip the OAuth / callback URL section on that page. It is not used.
 
 ### Bulk import format
 
-Separate stories with a blank line. The first line is the title.
+Separate stories with a blank line. Only the title (first line) is required.
 
 ```text
-As a student, I want to search clinics, so that I can book faster
+Short title of the story
+role: who it is for
+want: what they want to do
+why: the benefit
 points: 3
 pri: Must
-owner: Alice Tan
-ac: Given the Services screen, when I type dental, then matches show in 1 s
-tasks: Search box added
-tasks: 3 widget tests pass in CI
+owner: Trello name
+ac: Given ..., when ..., then ...
+ac: add one line for each check
+tasks: one small task
+tasks: add one line for each task
 ```
 
-`pri:` is Must, Should, Could or Won't. Repeat `ac:` and `tasks:` for more lines. If `tasks:` is empty, the `ac:` lines become the checklist.
+`pri:` is Must, Should, Could or Won't. Repeat `ac:` and `tasks:` for more lines. If `tasks:` is empty, the `ac:` lines become the checklist. You can also write the story as one line: `As a student, I want to search clinics, so that I can book faster`.
+
+**Using an AI assistant:** the Bulk import box has a **Copy template** button. Give an assistant that template and your notes, ask it to write one block per story, and paste its answer into the box. It should only use what is in your notes, and you should check every story before you push it. Add a comment on the card saying AI helped, as your course asks.
 
 ### Good to know
 

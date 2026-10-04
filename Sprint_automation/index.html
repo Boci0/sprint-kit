@@ -12,7 +12,8 @@
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,sans-serif}
 @media(min-width:900px){#main.pg-write{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}#main.pg-setup{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(min-width:1100px){#main.pg-push{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.wrap{max-width:1680px;margin:0 auto;padding:12px 16px 32px}
+.wrap{max-width:1680px;margin:0 auto;padding:12px 16px 0;min-height:100vh;display:flex;flex-direction:column}
+#main{margin-bottom:14px}
 h1{font-size:20px;margin:0}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px}
 #theme{padding:5px 11px}
@@ -30,8 +31,9 @@ label{display:block;font-weight:600;margin:8px 0 2px}
 label small{font-weight:400;color:var(--mute)}
 input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
 textarea{resize:vertical;min-height:52px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+input:not([type=checkbox]):not([type=file]),select{height:36px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-items:end}
 @media(min-width:720px){.span2{grid-column:span 2}}
 .btn{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600}
 .btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -68,7 +70,8 @@ ol.how{margin:0 0 12px;padding-left:20px}
 ol.how li{margin:4px 0}
 .big{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;white-space:pre-wrap;margin:8px 0 0;font:13px/1.5 ui-monospace,Consolas,monospace;max-height:180px;overflow:auto}
-.foot{margin-top:14px;display:flex;gap:14px;flex-wrap:wrap}
+.foot{margin-top:auto;position:sticky;bottom:0;z-index:5;display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:8px 6px;background:var(--bg);border-top:1px solid var(--line)}
+.foot .btn.link{padding:4px 6px}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;opacity:0;transition:.2s;pointer-events:none}
 #toast.on{opacity:1}
 @media(max-width:560px){.two,.three{grid-template-columns:1fr}}
@@ -78,11 +81,14 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:
 <div class="wrap">
   <div class="top"><h1>Sprint Kit for Trello</h1><button class="btn" id="theme" title="Switch between automatic, light and dark"></button></div>
   <p class="sub">Write your user stories here, then copy them into Trello.</p>
+  <div class="banner ok" id="upd" hidden style="margin:0 0 12px"></div>
   <div class="steps" id="steps"></div>
   <div id="main"></div>
   <div class="foot">
     <button class="btn link" id="goSetup">First time? Set up the Trello board</button>
     <button class="btn link" id="exp">Save backup</button>
+    <button class="btn link" id="chk" hidden>Check for updates</button>
+    <span class="mute" id="ver" style="align-self:center"></span>
     <label class="btn link" style="margin:0;cursor:pointer">Load backup<input type="file" id="imp" accept=".json" hidden></label>
   </div>
 </div>
@@ -98,9 +104,9 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const lines=t=>String(t||'').split('\n').map(x=>x.trim()).filter(Boolean);
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),2400)}
-async function copy(t,btn){
+async function copy(t,btn,msg){
   try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}
-  toast('Copied — now paste in Trello');if(btn){btn.classList.add('done');btn.textContent='Copied ✓'}
+  toast(msg||'Copied. Now paste it in Trello');if(btn){btn.classList.add('done');btn.textContent='Copied ✓'}
 }
 const nextId=()=>'US-'+String((S.stories.reduce((m,s)=>Math.max(m,+s.id.replace(/\D/g,'')||0),0))+1).padStart(2,'0');
 const fmt=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';
@@ -143,16 +149,16 @@ function pWrite(){
       <div><label>Why? <small>the benefit</small></label><input id="f-why" value="${esc(s.why)}"></div>
     </div>
     <div class="two">
-      <div><label>How do we know it's done? <small>one line each, e.g. “Given a valid account, when I log in, then I see Home in 2 seconds”</small></label>
-        <textarea id="f-ac" rows="3">${esc(s.ac)}</textarea></div>
-      <div><label>Tasks <small>optional, one per line — if empty, the “done” lines become the checklist</small></label>
-        <textarea id="f-tasks" rows="3">${esc(s.tasks)}</textarea></div>
+      <div><label>How do we know it's done? <small>one line each</small></label>
+        <textarea id="f-ac" rows="3" placeholder="Given a valid account, when I log in, then I see Home in 2 seconds">${esc(s.ac)}</textarea></div>
+      <div><label>Tasks <small>optional, one per line</small></label>
+        <textarea id="f-tasks" rows="3" placeholder="Leave empty to use the lines on the left as the checklist">${esc(s.tasks)}</textarea></div>
     </div>
     <div class="three">
       <div><label>Points <small>effort, optional</small></label><input id="f-points" type="number" min="0" value="${esc(s.points)}"></div>
       <div><label>Priority</label><select id="f-pri">${[['Must','Must have'],['Should','Should have'],['Could','Could have'],["Won't","Won't (this time)"]].map(([v,l])=>`<option value="${v}" ${s.pri===v?'selected':''}>${l}</option>`).join('')}</select></div>
-      <div><label>Owner <small>Trello name or @username, comma-separate for several</small></label>
-        <input id="f-owner" list="owners" value="${esc(s.owner)}" autocomplete="off">
+      <div><label>Owner <small>Trello name or @username</small></label>
+        <input id="f-owner" list="owners" placeholder="Separate several with commas" value="${esc(s.owner)}" autocomplete="off">
         <datalist id="owners">${[...new Set([...TB.members.map(m=>m.fullName||m.username),...S.stories.flatMap(x=>String(x.owner||'').split(',').map(n=>n.trim()))].filter(Boolean))].map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
     </div>
     <div class="big"><button class="btn p" id="save">${editing!==null?'Save changes':'Add story'}</button>${editing!==null?'<button class="btn" id="cancel">Cancel</button>':''}</div>
@@ -167,18 +173,21 @@ function pWrite(){
   <div class="stack">
   <div class="panel">
     <h2>Bulk import from text</h2>
-    <p class="mute" style="margin-top:0">Paste several stories at once. Separate stories with a blank line. The first line is the title. After that, use any of these lines (all optional):</p>
-    <pre>As a student, I want to search clinics, so that I can book faster
+    <p class="mute" style="margin-top:0">Paste several stories at once, with a blank line between them. Only the title (first line) is required. An AI assistant can fill this in from your notes: copy the template, give it your notes, then paste its answer below.</p>
+    <pre id="tpl-text">Short title of the story
+role: who it is for
+want: what they want to do
+why: the benefit
 points: 3
 pri: Must
-owner: Alice Tan
-ac: Given the Services screen, when I type dental, then matches show in 1 s
-ac: Given no matches, when I search, then I see “No results”
-tasks: Search box added
-tasks: 3 widget tests pass in CI</pre>
-    <p class="mute">You can write the story as one “As a …, I want …, so that …” line, or as separate <code>role:</code> <code>want:</code> <code>why:</code> lines. Repeat <code>ac:</code> and <code>tasks:</code> for more lines. <code>pri:</code> is Must, Should, Could or Won't.</p>
+owner: Trello name
+ac: Given ..., when ..., then ...
+ac: add one line for each check
+tasks: one small task
+tasks: add one line for each task</pre>
+    <p class="mute">pri is Must, Should, Could or Won't. You can also write the story as one line: "As a student, I want to search clinics, so that I can book faster".</p>
     <textarea id="bulk" style="min-height:200px" placeholder="Paste stories here"></textarea>
-    <div class="big"><button class="btn p" id="bulk-go">Import stories</button></div>
+    <div class="big"><button class="btn p" id="bulk-go">Import stories</button><button class="btn" id="tpl">Copy template</button></div>
   </div>
   </div>`;
 }
@@ -215,8 +224,8 @@ function pCopy(){
     <h2>How to put this into Trello</h2>
     <ol class="how">
       <li>Open your board and click <b>+ Add a card</b> in the list you want (e.g. Product Backlog).</li>
-      <li>Click <b>Copy all titles</b> below and paste into the box — each line becomes its own card.</li>
-      <li>Open a card, then use that story's <b>Copy description</b> and <b>Copy checklist</b> buttons below. Paste the description into the card's description box. For the checklist, add a checklist and paste — Trello offers to add each line as an item.</li>
+      <li>Click <b>Copy all titles</b> below and paste it into the box. Each line becomes its own card.</li>
+      <li>Open a card, then use that story's <b>Copy description</b> and <b>Copy checklist</b> buttons below. Paste the description into the card's description box. For the checklist, add a checklist and paste. Trello offers to add each line as an item.</li>
       <li>In Trello, add the label (Must/Should…) and put yourself or a teammate on the card.</li>
     </ol>
     <label>Sprint Review date <small>shown as the due date in each description</small></label>
@@ -271,7 +280,7 @@ async function tr(method,path,params={}){
     if(!res.ok){const t=await res.text();throw new Error(res.status===401?'Trello rejected the key/token (401). Check both are correct.':`${res.status} ${t.slice(0,140)}`)}
     return res.json();
   }
-  throw new Error('Trello rate limit hit — wait a minute and try again.');
+  throw new Error('Trello is limiting requests. Wait a minute and try again.');
 }
 async function loadBoards(){
   TB.msg='Connecting…';render();
@@ -363,7 +372,7 @@ async function pushAll(){
           if(due)p.due=due;if(lab)p.idLabels=lab.id;
           const {ids,miss}=memberIds(s.owner),who=ids.length?ids:(T.memberId?[T.memberId]:[]);
           if(who.length)p.idMembers=who.join(',');
-          if(miss.length)say(`⚠ ${s.id}: no board member matches “${miss.join(', ')}”${ids.length?'':' — used the default person'}`);
+          if(miss.length)say(`⚠ ${s.id}: no board member matches “${miss.join(', ')}”${ids.length?'':', so the default person was used'}`);
           card=await tr('POST','/cards',p);fresh=true;
         }
         s.cardId=card.id;s.cardUrl=card.shortUrl;s.clId=undefined;s.checkDone=false;save();created++;
@@ -372,8 +381,8 @@ async function pushAll(){
       s.checkDone=true;save();
       say(`✓ ${s.id} ${s.title}`);await sleep(150);
     }
-    say(`\nDone — ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+'.');
-  }catch(e){failed=e.message;say('\n⚠ Stopped: '+e.message+'\nProgress is saved. Click the button again to carry on where it stopped — nothing will be duplicated.')}
+    say(`\nDone: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+'.');
+  }catch(e){failed=e.message;say('\n⚠ Stopped: '+e.message+'\nProgress is saved. Click the button again to carry on where it stopped. Nothing will be duplicated.')}
   TB.busy=false;
   TB.result=failed?{ok:false,text:'Stopped: '+failed+' Progress is saved; click the button again to carry on.'}
     :{ok:true,text:`Done: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+'.'};
@@ -393,7 +402,7 @@ function pPush(){
     <div class="big"><button class="btn p" id="connect">Connect</button><button class="btn link" id="forget">Forget key &amp; token</button></div>
     <p class="mute">${esc(TB.msg)}</p></div>
   ${connected?`<div class="panel"><h2>2. Choose where the cards go</h2>
-    <label>Board</label><select id="t-board"><option value="">— choose —</option>${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
+    <label>Board</label><select id="t-board"><option value="">Choose a board</option>${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
     ${T.boardId?`<div class="mute" style="margin-top:4px">Board ID: <code>${esc(T.boardId)}</code> <button class="btn link" data-copy="${esc(T.boardId)}">Copy</button> for the GitHub secret TRELLO_BOARD_ID</div>`:''}
     ${TB.lists.length?`<label>List</label><select id="t-list">${TB.lists.map(l=>`<option value="${l.id}" ${T.listId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>
     <label>Default person <small>added to cards whose story has no owner (or an owner that isn't on the board)</small></label>
@@ -404,7 +413,7 @@ function pPush(){
     <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
     <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s) in Trello`:([pending&&`create ${pending} card(s)`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
     ${TB.result?`<div class="banner ${TB.result.ok?'ok':'err'}">${esc(TB.result.text)}</div>`:''}<pre id="log" style="min-height:40px"></pre>
-    <div>${S.stories.filter(s=>s.cardUrl).map(s=>`<div class="mute">✓ ${esc(s.id)} — <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a></div>`).join('')}</div>
+    <div>${S.stories.filter(s=>s.cardUrl).map(s=>`<div class="mute">✓ ${esc(s.id)}: <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a></div>`).join('')}</div>
     <p class="mute">Later edits here don't update cards already in Trello; edit those in Trello.</p></div>`:''}`;
 }
 
@@ -455,15 +464,15 @@ function analyse(){
   const dl=TB.lists.find(l=>/done/i.test(l.name)),n=dl&&(dl.name.match(/\d+/)||[])[0];
   return{n,scope,cards,doneC,open,tp:sum(cards),dp:sum(doneC),byList,owners,flags,feedback:all.filter(c=>/feedback/i.test(c.list))};
 }
-const cardLine=c=>`${c.name}${c.owners.length?' — '+c.owners.join(', '):''}`;
+const cardLine=c=>`${c.name}${c.owners.length?' ('+c.owners.join(', ')+')':''}`;
 function mdReport(a){
   const pct=a.tp?Math.round(a.dp/a.tp*100):0;
-  const L=[`## Sprint ${a.n||''} review — ${R.board}`.replace('  ',' '),`Generated ${R.at.toLocaleString('en-GB')}`,'',
+  const L=[`## Sprint ${a.n||''} review: ${R.board}`.replace('  ',' '),`Generated ${R.at.toLocaleString('en-GB')}`,'',
    `**Result:** ${a.dp} of ${a.tp} points done (${pct}%) · ${a.doneC.length} of ${a.cards.length} cards in Done`,'',
    '### By list','| List | Cards | Points |','|---|---|---|',...a.byList.map(l=>`| ${l.name} | ${l.n} | ${l.pts} |`),'',
    '### By owner','| Owner | Cards done / total | Points done / total |','|---|---|---|',...Object.entries(a.owners).map(([o,r])=>`| ${o} | ${r.dn} / ${r.n} | ${r.dp} / ${r.p} |`),'',
    `### Completed (${a.doneC.length})`,...(a.doneC.map(c=>`- ${cardLine(c)}`)),...(a.doneC.length?[]:['- none']),'',
-   `### Not completed — carry over (${a.open.length})`,...(a.open.map(c=>`- ${cardLine(c)} — ${c.list}${c.ci.total?`, checklist ${c.ci.done}/${c.ci.total}`:''}`)),...(a.open.length?[]:['- none']),''];
+   `### Not completed, to carry over (${a.open.length})`,...(a.open.map(c=>`- ${cardLine(c)}, in ${c.list}${c.ci.total?`, checklist ${c.ci.done}/${c.ci.total}`:''}`)),...(a.open.length?[]:['- none']),''];
   if(a.feedback.length)L.push(`### Client feedback (${a.feedback.length})`,...a.feedback.map(c=>`- ${c.name}`),'');
   if(a.flags.length)L.push('### Needs attention',...a.flags.map(f=>`- ${f}`),'');
   return L.join('\n');
@@ -492,7 +501,7 @@ function pReport(){
   <div class="panel"><h2>By owner</h2>${tbl(['Owner','Cards done','Points done'],Object.entries(a.owners).map(([o,r])=>[o,`${r.dn} / ${r.n}`,`${r.dp} / ${r.p}`]),[1,2])}
     <p class="mute" style="margin:8px 0 0">A card with two owners counts for each of them.</p></div>
   </div>
-  <div class="panel wide"><h2>Carry over to the next sprint (${a.open.length})</h2>${a.open.length?tbl(['Card','List','Owner','Checklist'],a.open.map(c=>[c.name,c.list,c.owners.join(', ')||'—',c.ci.total?`${c.ci.done}/${c.ci.total}`:'—']),[3]):'<p class="mute">Nothing — everything is done.</p>'}</div>
+  <div class="panel wide"><h2>Carry over to the next sprint (${a.open.length})</h2>${a.open.length?tbl(['Card','List','Owner','Checklist'],a.open.map(c=>[c.name,c.list,c.owners.join(', ')||'-',c.ci.total?`${c.ci.done}/${c.ci.total}`:'-']),[3]):'<p class="mute">Nothing. Everything is done.</p>'}</div>
   <div class="wide ${a.feedback.length?'cols2':''}">
   <div class="panel"><h2>Needs attention (${a.flags.length})</h2>${a.flags.length?'<ul style="margin:0;padding-left:20px">'+a.flags.map(f=>`<li>${esc(f)}</li>`).join('')+'</ul>':'<p class="mute">No problems found.</p>'}</div>
   ${a.feedback.length?`<div class="panel"><h2>Client feedback (${a.feedback.length})</h2><ul style="margin:0;padding-left:20px">${a.feedback.map(c=>`<li>${esc(c.name)}</li>`).join('')}</ul></div>`:''}
@@ -545,6 +554,7 @@ function bind(){
     save();render();
     toast(`Imported ${fresh.length} stor${fresh.length===1?'y':'ies'}`+(dupes?`, ${dupes} skipped (title already in your list)`:'')+(skipped?`, ${skipped} line${skipped===1?'':'s'} not understood`:''));
   };
+  if($('#tpl'))$('#tpl').onclick=e=>copy($('#tpl-text').textContent,e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
   if($('#cancel'))$('#cancel').onclick=()=>{editing=null;render()};
   if($('#save'))$('#save').onclick=()=>{
     const v=k=>$('#f-'+k).value.trim();
@@ -563,7 +573,40 @@ function applyTheme(){const t=theme;
   $('#theme').textContent='Theme: '+t[0].toUpperCase()+t.slice(1)}
 $('#theme').onclick=()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%THEMES.length];try{localStorage.setItem(THEME_KEY,theme)}catch(e){}applyTheme()};
 applyTheme();
+// Updates (desktop app only): look for a newer signed version on GitHub
+const UPD=window.__TAURI__&&window.__TAURI__.updater;
+let found=null,installing=false;
+function updBanner(html){const e=$('#upd');e.innerHTML=html;e.hidden=!html}
+async function checkUpdate(manual){
+  if(!UPD||installing)return;
+  if(manual)updBanner('Checking for updates...');
+  try{
+    found=await UPD.check();
+    if(found){
+      updBanner(`<b>Version ${esc(found.version)} is available.</b> <button class="btn p" id="upd-go">Update now</button> <button class="btn link" id="upd-later">Later</button>`);
+      $('#upd-go').onclick=installUpdate;$('#upd-later').onclick=()=>updBanner('');
+    }else if(manual){updBanner('You have the latest version.');setTimeout(()=>{if(!installing)updBanner('')},4000)}
+    else updBanner('');
+  }catch(e){updBanner(manual?'Could not check for updates: '+esc(String(e)):'')}
+}
+async function installUpdate(){
+  installing=true;let total=0,got=0;updBanner('Downloading the update...');
+  try{
+    await found.downloadAndInstall(ev=>{
+      if(ev.event==='Started')total=ev.data.contentLength||0;
+      else if(ev.event==='Progress'){got+=ev.data.chunkLength;updBanner('Downloading the update'+(total?` (${Math.round(got/total*100)}%)`:'')+'...')}
+      else if(ev.event==='Finished')updBanner('Installing. The app will close and open again by itself.');
+    });
+  }catch(e){installing=false;updBanner('The update failed: '+esc(String(e))+' <button class="btn link" id="upd-retry">Try again</button>');$('#upd-retry').onclick=()=>checkUpdate(true)}
+}
+function initUpdates(){
+  if(!UPD)return;
+  $('#chk').hidden=false;$('#chk').onclick=()=>checkUpdate(true);
+  try{window.__TAURI__.app.getVersion().then(v=>{$('#ver').textContent='Version '+v})}catch(e){}
+  checkUpdate(false);
+}
 initSecure();
+initUpdates();
 // In the desktop (Tauri) app, open external links in the default browser
 document.addEventListener('click',e=>{
   const a=e.target.closest('a[href^="http"]');
