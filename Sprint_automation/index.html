@@ -66,6 +66,12 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 .item{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}
 .item:first-child{border-top:0}
 .grow{flex:1;min-width:0}
+.dlg{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(9,30,66,.45);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);animation:dlgin .12s ease-out}
+.dlg-box{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:20px;width:100%;max-width:380px;box-shadow:0 16px 48px rgba(0,0,0,.35)}
+.dlg-box h3{margin:0 0 6px;font-size:16px}.dlg-box p{margin:0;color:var(--mute)}
+.dlg-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.btn.d{background:#c9372c;border-color:#c9372c;color:#fff}.btn.d:hover{background:#ae2e24}
+@keyframes dlgin{from{opacity:0}to{opacity:1}}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.chips .btn{padding:3px 10px;border-radius:999px;font-weight:500;font-size:12px}
 .pick{flex-wrap:wrap}.pick .grow{flex:1 1 170px}.pick select{width:auto;min-width:200px;max-width:100%;flex:0 1 auto;padding-right:28px;text-overflow:clip}
 .mute{color:var(--mute);font-size:13px}
@@ -144,6 +150,20 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const lines=t=>String(t||'').split('\n').map(x=>x.trim()).filter(Boolean);
+// In-app message box (the browser's own confirm() looks out of place in the desktop app)
+function ask(title,text,{ok='OK',cancel='Cancel',danger=false}={}){
+  return new Promise(done=>{
+    const prev=document.activeElement,o=document.createElement('div');
+    o.className='dlg';o.innerHTML=`<div class="dlg-box" role="alertdialog" aria-modal="true" aria-labelledby="dlg-t"><h3 id="dlg-t">${esc(title)}</h3>${text?`<p>${esc(text)}</p>`:''}<div class="dlg-btns">${cancel?`<button class="btn" data-r="0">${esc(cancel)}</button>`:''}<button class="btn ${danger?'d':'p'}" data-r="1">${esc(ok)}</button></div></div>`;
+    const finish=v=>{document.removeEventListener('keydown',key,true);o.remove();if(prev&&prev.focus)prev.focus();done(v)};
+    const key=e=>{
+      if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finish(false)}
+      else if(e.key==='Tab'){const b=[...o.querySelectorAll('button')],i=b.indexOf(document.activeElement);e.preventDefault();b[(i+(e.shiftKey?-1:1)+b.length)%b.length].focus()}};
+    o.onclick=e=>{if(e.target===o)finish(false);const b=e.target.closest('[data-r]');if(b)finish(b.dataset.r==='1')};
+    document.addEventListener('keydown',key,true);document.body.appendChild(o);
+    (danger&&cancel?o.querySelector('[data-r="0"]'):o.querySelector('[data-r="1"]')).focus();
+  });
+}
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),2400)}
 async function copy(t,btn,msg){
   try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}
@@ -621,7 +641,7 @@ function bind(){
   document.querySelectorAll('[data-cd]').forEach(b=>b.onclick=()=>copy(cardDesc(S.stories[+b.dataset.cd]),b));
   document.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>copy(cardTasks(S.stories[+b.dataset.ct]),b));
   document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=+b.dataset.edit;render();scrollTo(0,0)});
-  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this story?')){S.stories.splice(+b.dataset.del,1);editing=null;save();render()}});
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{const s=S.stories[+b.dataset.del];if(await ask('Delete this story?',`${s.id} ${s.title} will be removed from your list. A card already on Trello is not touched.`,{ok:'Delete',danger:true})){S.stories.splice(S.stories.indexOf(s),1);editing=null;save();render()}});
   if($('#connect'))$('#connect').onclick=async()=>{T.key=$('#t-key').value.trim();T.token=$('#t-token').value.trim();if(!T.key||!T.token){TB.msg='Enter both the key and the token.';render();return}const cb=$('#connect');cb.classList.add('busy');cb.disabled=true;cb.textContent='Connecting…';await persistSecrets();saveT();loadBoards()};
   if($('#forget'))$('#forget').onclick=async()=>{T={};await persistSecrets();saveT();TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};render()};
   if($('#t-board'))$('#t-board').onchange=async e=>{if(!e.target.value)return;try{await loadBoard(e.target.value);await reconcilePushed().catch(()=>{})}catch(x){TB.msg='⚠ '+x.message}render()};
@@ -651,12 +671,12 @@ function bind(){
   if($('#tpl'))$('#tpl').onclick=e=>copy(TEMPLATE_TEXT,e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
   document.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{const f=$('#f-list');f.value=b.dataset.chip;f.focus()});
   if($('#cancel'))$('#cancel').onclick=()=>{editing=null;render()};
-  if($('#save'))$('#save').onclick=()=>{
+  if($('#save'))$('#save').onclick=async()=>{
     const v=k=>$('#f-'+k).value.trim();
     if(!v('title')){toast('Give the story a title');$('#f-title').focus();return}
     const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:$('#f-ac').value,points:v('points'),pri:v('pri'),tasks:$('#f-tasks').value,owner:v('owner'),list:v('list')};
     const same=S.stories.find((x,i)=>i!==editing&&x.title.trim().toLowerCase()===d.title.toLowerCase());
-    if(same&&!confirm(`A story called “${same.title}” already exists as ${same.id}. Add it again as a new story?`))return;
+    if(same&&!await ask('Add it again?',`A story called “${same.title}” already exists as ${same.id}.`,{ok:'Add anyway'}))return;
     if(editing!==null)Object.assign(S.stories[editing],d);else S.stories.push({id:nextId(),...d});
     editing=null;save();render();toast(`Saved “${d.title}”`);scrollTo(0,0);
   };
@@ -711,7 +731,7 @@ document.addEventListener('click',e=>{
 });
 $('#goSetup').onclick=()=>{page='setup';render()};
 $('#exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download='sprint-stories.json';a.click()};
-$('#imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.stories)throw 0;S=d;save();page='write';render()}catch(x){alert('Not a valid backup file')}})};
+$('#imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.stories)throw 0;S=d;save();page='write';render()}catch(x){ask('Not a valid backup file','Choose a file you saved with Save backup.',{ok:'OK',cancel:''})}})};
 render();
 </script>
 </body>
