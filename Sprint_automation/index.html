@@ -126,7 +126,46 @@ function pWrite(){
     ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}</div></div>
       <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('')||'<p class="mute">Nothing yet. Add your first story above.</p>'}
     ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
+  </div>
+  <div class="panel">
+    <h2>Bulk import from text</h2>
+    <p class="mute" style="margin-top:0">Paste several stories at once. Separate stories with a blank line. The first line is the title. After that, use any of these lines (all optional):</p>
+    <pre>As a student, I want to search clinics, so that I can book faster
+points: 3
+pri: Must
+owner: Alice Tan
+ac: Given the Services screen, when I type dental, then matches show in 1 s
+ac: Given no matches, when I search, then I see “No results”
+tasks: Search box added
+tasks: 3 widget tests pass in CI</pre>
+    <p class="mute">You can write the story as one “As a …, I want …, so that …” line, or as separate <code>role:</code> <code>want:</code> <code>why:</code> lines. Repeat <code>ac:</code> and <code>tasks:</code> for more lines. <code>pri:</code> is Must, Should, Could or Won't.</p>
+    <textarea id="bulk" style="min-height:150px" placeholder="Paste stories here"></textarea>
+    <div class="big"><button class="btn p" id="bulk-go">Import stories</button></div>
   </div>`;
+}
+
+const PRI_MAP=[[/^m/i,'Must'],[/^s/i,'Should'],[/^c/i,'Could'],[/^w/i,"Won't"]];
+function parseStories(text){
+  let skipped=0;
+  const out=text.split(/\n\s*\n/).map(b=>b.split('\n').map(x=>x.trim()).filter(Boolean)).filter(b=>b.length).map(b=>{
+    const s={title:b[0].replace(/^title\s*:\s*/i,'').replace(/^(?:[-*•]|\d+[.)])\s+/,''),role:'',want:'',why:'',ac:'',points:'',pri:'Should',tasks:'',owner:''};
+    const ac=[],tk=[];
+    b.slice(1).forEach(l=>{
+      const sent=l.match(/^as an?\s+(.+?),?\s+i want\s+(.+?),?\s+so that\s+(.+)$/i);
+      if(sent){s.role=sent[1];s.want=sent[2];s.why=sent[3];return}
+      const m=l.match(/^(role|want|why|benefit|points|pts|pri|priority|owner|ac|done|tasks?|check)\s*:\s*(.*)$/i);
+      if(!m){skipped++;return}
+      const k=m[1].toLowerCase(),v=m[2].trim();
+      if(k==='ac'||k==='done')ac.push(v);
+      else if(k==='task'||k==='tasks'||k==='check')tk.push(v);
+      else if(k==='pri'||k==='priority'){const p=PRI_MAP.find(([re])=>re.test(v));if(p)s.pri=p[1];else skipped++}
+      else if(k==='points'||k==='pts')s.points=v.replace(/\D/g,'');
+      else if(k==='benefit')s.why=v;
+      else s[k]=v;
+    });
+    s.ac=ac.join('\n');s.tasks=tk.join('\n');return s;
+  });
+  return{stories:out,skipped};
 }
 
 function pCopy(){
@@ -282,6 +321,13 @@ function bind(){
   if($('#t-redo'))$('#t-redo').onchange=e=>{T.redo=e.target.checked;saveT();render()};
   if($('#go'))$('#go').onclick=pushAll;
   if($('#review'))$('#review').onchange=e=>{S.review=e.target.value;save();render()};
+  if($('#bulk-go'))$('#bulk-go').onclick=()=>{
+    const {stories,skipped}=parseStories($('#bulk').value);
+    if(!stories.length){toast('Paste some stories first');return}
+    stories.forEach(s=>S.stories.push({id:nextId(),...s}));
+    save();render();
+    toast(`Imported ${stories.length} stor${stories.length===1?'y':'ies'}`+(skipped?` (${skipped} line${skipped===1?'':'s'} not understood)`:''));
+  };
   if($('#cancel'))$('#cancel').onclick=()=>{editing=null;render()};
   if($('#save'))$('#save').onclick=()=>{
     const v=k=>$('#f-'+k).value.trim();
