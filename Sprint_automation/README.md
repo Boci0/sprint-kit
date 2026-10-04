@@ -4,7 +4,7 @@ Write your user stories once, then get them into Trello as cards: with the descr
 
 ## Download
 
-**[Download the latest Windows installer](https://github.com/Boci0/projects/releases/latest)**
+**[Download the latest Windows installer](https://github.com/Boci0/sprint-kit/releases/latest)**
 
 Open that page and, under **Assets**, download the file ending in `x64-setup.exe`. Then run it.
 
