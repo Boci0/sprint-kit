@@ -151,7 +151,7 @@ function pCopy(){
 /* ---------- Trello API push ---------- */
 const TK='sprintkit.trello';
 let T=(()=>{try{return JSON.parse(localStorage.getItem(TK))||{}}catch(e){return{}}})();
-let TB={boards:[],lists:[],labels:[],msg:'',busy:false};
+let TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};
 const saveT=()=>{try{localStorage.setItem(TK,JSON.stringify(T))}catch(e){}};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const LABEL_FOR={Must:['Must have','red'],Should:['Should have','orange'],Could:['Could have','green'],"Won't":["Won't (this time)",'black']};
@@ -179,6 +179,10 @@ async function loadBoard(id){
   T.boardId=id;saveT();
   TB.lists=await tr('GET',`/boards/${id}/lists`,{filter:'open'});
   TB.labels=await tr('GET',`/boards/${id}/labels`,{fields:'name,color',limit:1000});
+  TB.members=await tr('GET',`/boards/${id}/members`,{fields:'fullName,username'});
+  if(T.memberId===undefined||(T.memberId&&!TB.members.some(m=>m.id===T.memberId))){
+    const me=await tr('GET','/members/me',{fields:'id'});
+    T.memberId=TB.members.some(m=>m.id===me.id)?me.id:'';saveT()}
   if(!TB.lists.some(l=>l.id===T.listId)){T.listId=(TB.lists.find(l=>/backlog/i.test(l.name))||TB.lists[0]||{}).id;saveT()}
 }
 async function pushAll(){
@@ -193,7 +197,7 @@ async function pushAll(){
       let lab=TB.labels.find(l=>l.name===lname);
       if(!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
       const p={idList:T.listId,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
-      if(due)p.due=due;if(lab)p.idLabels=lab.id;
+      if(due)p.due=due;if(lab)p.idLabels=lab.id;if(T.memberId)p.idMembers=T.memberId;
       const card=await tr('POST','/cards',p);
       s.cardId=card.id;s.cardUrl=card.shortUrl;save();
       const items=cardTasks(s).split('\n').filter(Boolean);
@@ -221,6 +225,8 @@ function pPush(){
   ${connected?`<div class="panel"><h2>2. Choose where the cards go</h2>
     <label>Board</label><select id="t-board"><option value="">— choose —</option>${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
     ${TB.lists.length?`<label>List</label><select id="t-list">${TB.lists.map(l=>`<option value="${l.id}" ${T.listId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>
+    <label>Add this person to every card <small>the accountable member; you can change it per card in Trello</small></label>
+    <select id="t-member"><option value="">Nobody</option>${TB.members.map(m=>`<option value="${m.id}" ${T.memberId===m.id?'selected':''}>${esc(m.fullName||m.username)}</option>`).join('')}</select>
     <label style="font-weight:400"><input type="checkbox" id="t-mk" ${T.makeLabels?'checked':''} style="width:auto"> Create the Must / Should / Could labels if the board doesn't have them</label>
     <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label>`:''}</div>`:''}
   ${connected&&TB.lists.length?`<div class="panel"><h2>3. Push</h2>
@@ -252,9 +258,10 @@ function bind(){
   document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=+b.dataset.edit;render();scrollTo(0,0)});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this story?')){S.stories.splice(+b.dataset.del,1);editing=null;save();render()}});
   if($('#connect'))$('#connect').onclick=()=>{T.key=$('#t-key').value.trim();T.token=$('#t-token').value.trim();if(!T.key||!T.token){TB.msg='Enter both the key and the token.';render();return}saveT();loadBoards()};
-  if($('#forget'))$('#forget').onclick=()=>{T={};saveT();TB={boards:[],lists:[],labels:[],msg:'',busy:false};render()};
+  if($('#forget'))$('#forget').onclick=()=>{T={};saveT();TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};render()};
   if($('#t-board'))$('#t-board').onchange=async e=>{if(!e.target.value)return;try{await loadBoard(e.target.value)}catch(x){TB.msg='⚠ '+x.message}render()};
   if($('#t-list'))$('#t-list').onchange=e=>{T.listId=e.target.value;saveT()};
+  if($('#t-member'))$('#t-member').onchange=e=>{T.memberId=e.target.value;saveT()};
   if($('#t-mk'))$('#t-mk').onchange=e=>{T.makeLabels=e.target.checked;saveT()};
   if($('#t-redo'))$('#t-redo').onchange=e=>{T.redo=e.target.checked;saveT();render()};
   if($('#go'))$('#go').onclick=pushAll;
