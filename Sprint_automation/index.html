@@ -168,7 +168,7 @@ async function copy(t,btn,msg){
   toast(msg||'Copied. Now paste it in Trello');if(btn){btn.classList.add('done');btn.textContent='Copied ✓'}
 }
 const nextId=()=>'US-'+String((S.stories.reduce((m,s)=>Math.max(m,+s.id.replace(/\D/g,'')||0),0))+1).padStart(2,'0');
-const fmt=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';
+const fmt=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';
 
 /* what gets pasted into Trello */
 const cardTitle=s=>`${s.id} · ${s.title}${s.points?` [${s.points}]`:''}`;
@@ -276,17 +276,19 @@ function parseStories(text){
 
 // Export, so the stories can go into any other tool (most tools can import a CSV file)
 const PRI_LABEL={Must:'Must have',Should:'Should have',Could:'Could have',"Won't":"Won't (this time)"};
-const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+// A cell starting with = + - or @ is run as a formula by Excel and Sheets, so it gets a leading quote.
+const csvCell=v=>{const x=String(v??'');return '"'+(/^[=+\-@\t\r]/.test(x)?"'"+x:x).replace(/"/g,'""')+'"'};
+const plainOwner=o=>String(o||'').split(',').map(n=>n.trim().replace(/^@/,'')).filter(Boolean).join(', ');
 // Column names the Jira, Linear and Notion importers expect. Description holds the story, criteria and tasks.
 const CSV_FORMATS={
   generic:{head:['ID','Title','Summary','Description','Priority','Points','Owner','Acceptance criteria','Tasks'],
-    row:s=>[s.id,s.title,cardTitle(s),cardDesc(s),PRI_LABEL[s.pri]||s.pri,s.points,s.owner,lines(s.ac).join('\n'),lines(s.tasks).join('\n')]},
+    row:s=>[s.id,s.title,cardTitle(s),cardDesc(s),PRI_LABEL[s.pri]||s.pri,s.points,plainOwner(s.owner),lines(s.ac).join('\n'),lines(s.tasks).join('\n')]},
   jira:{head:['Summary','Issue Type','Priority','Story point estimate','Assignee','Description'],
-    row:s=>[cardTitle(s),'Story',{Must:'Highest',Should:'High',Could:'Medium',"Won't":'Low'}[s.pri]||'Medium',s.points,s.owner,cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'* '+x).join('\n'):'')]},
+    row:s=>[cardTitle(s),'Story',{Must:'Highest',Should:'High',Could:'Medium',"Won't":'Low'}[s.pri]||'Medium',s.points,plainOwner(s.owner),cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'* '+x).join('\n'):'')]},
   linear:{head:['Title','Description','Priority','Estimate','Assignee'],
-    row:s=>[cardTitle(s),cardDesc(s)+(lines(s.tasks).length?'\n\n'+lines(s.tasks).map(x=>'- [ ] '+x).join('\n'):''),{Must:'Urgent',Should:'High',Could:'Medium',"Won't":'Low'}[s.pri]||'Medium',s.points,s.owner]},
+    row:s=>[cardTitle(s),cardDesc(s)+(lines(s.tasks).length?'\n\n'+lines(s.tasks).map(x=>'- [ ] '+x).join('\n'):''),{Must:'Urgent',Should:'High',Could:'Medium',"Won't":'Low'}[s.pri]||'Medium',s.points,plainOwner(s.owner)]},
   notion:{head:['Name','Priority','Points','Owner','Description'],
-    row:s=>[cardTitle(s),PRI_LABEL[s.pri]||s.pri,s.points,s.owner,cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'- '+x).join('\n'):'')]}
+    row:s=>[cardTitle(s),PRI_LABEL[s.pri]||s.pri,s.points,plainOwner(s.owner),cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'- '+x).join('\n'):'')]}
 };
 function storiesCSV(fmt='generic'){
   const f=CSV_FORMATS[fmt]||CSV_FORMATS.generic,head=f.head,rows=S.stories.map(f.row);
@@ -429,18 +431,23 @@ function listFor(s){
 }
 // A story is "pushed" only while its card still exists. If the card was archived or deleted in Trello,
 // forget the link so the story can be pushed again.
+// A story's card link belongs to one board. On another board the story counts as not pushed yet (an existing card
+// with the same title there is reused, so going back and forth does not duplicate).
+const isPushed=s=>!!s.cardId&&(!s.cardBoard||s.cardBoard===T.boardId);
 async function reconcilePushed(say=()=>{}){
+  const mine=S.stories.filter(isPushed);
+  if(!mine.length||!T.boardId)return 0;
+  // One request for the whole board instead of one per card. A card missing from it was deleted or moved away.
+  const have=new Map((await tr('GET',`/boards/${T.boardId}/cards`,{filter:'all',fields:'closed'})).map(c=>[c.id,c.closed]));
   let cleared=0;
-  for(const s of S.stories.filter(x=>x.cardId)){
-    let gone=false;
-    try{gone=(await tr('GET',`/cards/${s.cardId}`,{fields:'closed'})).closed===true}
-    catch(e){if(/^404/.test(e.message))gone=true;else throw e}
-    if(gone){
-      delete s.cardId;delete s.cardUrl;delete s.clId;delete s.checkDone;cleared++;
+  for(const s of mine){
+    if(!s.cardBoard)s.cardBoard=T.boardId;
+    if(have.get(s.cardId)!==false){
+      delete s.cardId;delete s.cardUrl;delete s.cardBoard;delete s.clId;delete s.checkDone;cleared++;
       say(`↺ ${s.id}: its card was archived or deleted in Trello, so it will be created again`);
     }
   }
-  if(cleared)save();
+  save();
   return cleared;
 }
 // Adds the checklist for a card. After an interrupted push it reuses what is already there, so nothing is duplicated.
@@ -463,7 +470,7 @@ async function pushAll(){
   const go=$('#go');go.disabled=true;go.classList.add('busy');go.textContent='Checking Trello…';log.textContent='';
   try{await reconcilePushed(say)}
   catch(e){TB.result={ok:false,text:'Could not check Trello: '+e.message};const k=log.textContent;render();if($('#log'))$('#log').textContent=k;return}
-  const todo=S.stories.filter(s=>!s.cardId||s.checkDone===false||T.redo);
+  const todo=S.stories.filter(s=>!isPushed(s)||s.checkDone===false||T.redo);
   if(!todo.length){TB.result={ok:true,text:'Nothing to push: every story already has a card in Trello.'};const k=log.textContent;render();if($('#log'))$('#log').textContent=k;return}
   TB.busy=true;TB.result=null;go.textContent='Starting…';
   const due=S.review?new Date(S.review+'T17:00:00').toISOString():undefined;
@@ -472,12 +479,12 @@ async function pushAll(){
     // If an earlier push died after Trello made a card but before we heard back, reuse it instead of duplicating it.
     const onList=new Map();
     // Looks at the whole board (not just the target list), so a card that has since moved is still recognised.
-    if(!T.redo&&todo.some(s=>!s.cardId))
+    if(!T.redo&&todo.some(s=>!isPushed(s)))
       (await tr('GET',`/boards/${T.boardId}/cards`,{filter:'open',fields:'name,shortUrl'})).forEach(c=>onList.set(c.name,c));
     for(const [i,s] of todo.entries()){
       go.textContent=`Pushing ${i+1} of ${todo.length}…`;
       const items=cardTasks(s).split('\n').filter(Boolean);
-      const resume=s.cardId&&s.checkDone===false&&!T.redo;
+      const resume=isPushed(s)&&s.checkDone===false&&!T.redo;
       let fresh=false;
       if(resume){say(`↺ ${s.id}: finishing its checklist`);finished++}
       else{
@@ -498,7 +505,7 @@ async function pushAll(){
           if(miss.length)say(`⚠ ${s.id}: no board member matches “${miss.join(', ')}”${ids.length?'':', so the default person was used'}`);
           card=await tr('POST','/cards',p);fresh=true;
         }
-        s.cardId=card.id;s.cardUrl=card.shortUrl;if(dest)s.cardList=dest.name;s.clId=undefined;s.checkDone=false;save();created++;
+        s.cardId=card.id;s.cardUrl=card.shortUrl;s.cardBoard=T.boardId;if(dest)s.cardList=dest.name;s.clId=undefined;s.checkDone=false;save();created++;
       }
       if(items.length)await finishChecklist(s,items,fresh);
       s.checkDone=true;save();
@@ -508,14 +515,15 @@ async function pushAll(){
   }catch(e){failed=e.message;say('\n⚠ Stopped: '+e.message+'\nProgress is saved. Click the button again to carry on where it stopped. Nothing will be duplicated.')}
   TB.busy=false;
   TB.result=failed?{ok:false,text:'Stopped: '+failed+' Progress is saved; click the button again to carry on.'}
-    :{ok:true,text:`Done: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+(skipped?`, ${skipped} skipped because their list is not on this board`:'')+'.'};
+    :{ok:!(skipped&&!created),text:`Done: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+(skipped?`, ${skipped} skipped because their list is not on this board`:'')+'.'};
   const keep=log.textContent;render();if($('#log'))$('#log').textContent=keep;
 }
 function pPush(){
   if(!S.stories.length)return`<div class="panel"><p>Add some stories first.</p><button class="btn p" data-p="write">← Write stories</button></div>`;
-  const connected=TB.boards.length>0, pending=S.stories.filter(s=>!s.cardId).length, unfinished=S.stories.filter(s=>s.cardId&&s.checkDone===false).length;
-  const boardName=(TB.boards.find(b=>b.id===T.boardId)||{}).name||'',toMake=T.boardId&&TB.lists.length?S.stories.filter(s=>T.redo||!s.cardId):[];
+  const connected=TB.boards.length>0, pending=S.stories.filter(s=>!isPushed(s)).length, unfinished=S.stories.filter(s=>isPushed(s)&&s.checkDone===false).length;
+  const boardName=(TB.boards.find(b=>b.id===T.boardId)||{}).name||'',toMake=T.boardId&&TB.lists.length?S.stories.filter(s=>T.redo||!isPushed(s)):[];
   const byList=new Map();toMake.forEach(s=>{const d=listFor(s),k=d.make?d.name+' (new)':d.name;if(!d.skip)byList.set(k,(byList.get(k)||0)+1)});
+  const skipN=toMake.filter(s=>listFor(s).skip).length,ready=Math.max(0,pending-(T.redo?0:skipN));
   const defList=TB.lists.find(l=>l.id===T.listId)||TB.lists[0]||{name:''};
   const picker=toMake.length?'<div style="margin:8px 0 14px">'+toMake.map(s=>{
     const d=listFor(s),bad=d.make||d.miss,cur=bad?String(s.list).trim():(s.list?d.name:'');
@@ -546,11 +554,11 @@ function pPush(){
     <label style="font-weight:400"><input type="checkbox" id="t-ml" ${T.makeLists?'checked':''} style="width:auto"> Create lists that a story names but the board doesn't have <small>(off: those stories are skipped)</small></label>
     <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label></div>`:''}
   ${connected&&TB.lists.length?`<div class="panel"><h2>4. Push</h2>
-    <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
+    <p>${pending} of ${S.stories.length} stories not on this board yet. Each becomes a card with its description, due date, priority label and checklist.${skipN?` <b>${skipN} will be skipped because their list isn't on this board.</b>`:''}${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
     ${picker}
-    <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s)${where||' in Trello'}`:([pending&&`create ${pending} card(s)${where}`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
+    <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s)${where||' in Trello'}`:([ready&&`create ${ready} card(s)${where}`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
     ${TB.result?`<div class="banner ${TB.result.ok?'ok':'err'}">${esc(TB.result.text)}</div>`:''}<pre id="log" style="min-height:40px"></pre>
-    <div>${S.stories.filter(s=>s.cardUrl).map(s=>`<div class="mute">✓ ${esc(s.id)}: <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a>${s.cardList?' in '+esc(s.cardList):''}</div>`).join('')}</div>
+    <div>${S.stories.filter(s=>s.cardUrl&&isPushed(s)).map(s=>`<div class="mute">✓ ${esc(s.id)}: <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a>${s.cardList?' in '+esc(s.cardList):''}</div>`).join('')}</div>
     <p class="mute">Later edits here don't update cards already in Trello; edit those in Trello.</p></div>`:''}`;
 }
 
@@ -579,7 +587,7 @@ function analyse(){
     const items=(c.checklists||[]).flatMap(k=>k.checkItems);
     const pm=c.name.match(/\[(\d+)\]\s*$/);
     return{...c,list:ln[c.idList]||'?',code:(c.name.match(/^US-\d+/i)||[c.name.slice(0,24)])[0],
-      pts:pm?+pm[1]:0,done:/done/i.test(ln[c.idList]||''),owners:c.idMembers.map(id=>who[id]||'?'),
+      pts:pm?+pm[1]:0,done:/\bdone\b/i.test(ln[c.idList]||''),owners:c.idMembers.map(id=>who[id]||'?'),
       ci:{done:items.filter(i=>i.state==='complete').length,total:items.length},
       stale:Math.floor((now-new Date(c.dateLastActivity))/864e5)};
   });
@@ -593,12 +601,12 @@ function analyse(){
   byList.forEach(l=>{if(l.max&&l.n>+l.max)flags.push(`${l.name}: ${l.n} cards, over the limit of ${l.max}`)});
   open.forEach(c=>{
     if(!c.owners.length)flags.push(`${c.code} has no owner`);
-    if(/test|qa/i.test(c.list)&&c.ci.total&&c.ci.done<c.ci.total)flags.push(`${c.code} is in ${c.list} but its checklist is ${c.ci.done}/${c.ci.total}`);
+    if(/\btest(ing)?\b|\bqa\b/i.test(c.list)&&c.ci.total&&c.ci.done<c.ci.total)flags.push(`${c.code} is in ${c.list} but its checklist is ${c.ci.done}/${c.ci.total}`);
     if(!c.ci.total)flags.push(`${c.code} has no checklist`);
     if(c.stale>7)flags.push(`${c.code} untouched for ${c.stale} days`);
   });
   doneC.forEach(c=>{if(c.ci.total&&c.ci.done<c.ci.total)flags.push(`${c.code} is in Done but its checklist is ${c.ci.done}/${c.ci.total}`)});
-  const dl=TB.lists.find(l=>/done/i.test(l.name)),n=dl&&(dl.name.match(/\d+/)||[])[0];
+  const dl=TB.lists.find(l=>/\bdone\b/i.test(l.name)),n=dl&&(dl.name.match(/\d+/)||[])[0];
   return{n,scope,cards,doneC,open,tp:sum(cards),dp:sum(doneC),byList,owners,flags,feedback:all.filter(c=>/feedback/i.test(c.list))};
 }
 const cardLine=c=>`${c.name}${c.owners.length?' ('+c.owners.join(', ')+')':''}`;
@@ -687,7 +695,7 @@ function bind(){
     const {stories,skipped}=parseStories($('#bulk').value);
     if(!stories.length){toast('Paste some stories first');return}
     const have=new Set(S.stories.map(x=>x.title.trim().toLowerCase()));
-    const fresh=stories.filter(s=>!have.has(s.title.trim().toLowerCase()));
+    const fresh=stories.filter(s=>{const k=s.title.trim().toLowerCase();if(have.has(k))return false;have.add(k);return true});
     const dupes=stories.length-fresh.length;
     fresh.forEach(s=>{S.stories.push({id:nextId(),...s})});
     save();render();
@@ -757,7 +765,23 @@ document.addEventListener('click',e=>{
   if(a&&window.__TAURI__&&window.__TAURI__.opener){e.preventDefault();window.__TAURI__.opener.openUrl(a.href)}
 });
 $('#goSetup').onclick=()=>{page='setup';render()};
-const importStories=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.stories)throw 0;S=d;save();page='write';render()}catch(x){ask('Not a valid backup file','Choose a file you saved with Save stories to a file.',{ok:'OK',cancel:''})}})};
+const importStories=e=>{
+  const input=e.target,f=input.files[0];
+  if(!f)return;
+  const bad=()=>ask('Not a valid stories file','Choose a file you saved with Save stories to a file.',{ok:'OK',cancel:''});
+  f.text().then(async text=>{
+    let d;
+    try{d=JSON.parse(text)}catch(x){return bad()}
+    if(!d||!Array.isArray(d.stories)||d.stories.some(s=>!s||typeof s!=='object'||typeof s.title!=='string'))return bad();
+    const n=d.stories.length;
+    if(S.stories.length&&!await ask('Replace your stories?',`This loads ${n} stor${n===1?'y':'ies'} from the file and replaces the ${S.stories.length} you have now.`,{ok:'Replace',danger:true}))return;
+    const blank={role:'',want:'',why:'',ac:'',points:'',pri:'Should',tasks:'',owner:'',list:''};
+    S={review:typeof d.review==='string'?d.review:'',stories:[]};
+    d.stories.forEach(s=>S.stories.push({...blank,...s,id:typeof s.id==='string'?s.id:''}));
+    S.stories.forEach(s=>{if(!s.id)s.id=nextId()});
+    editing=null;save();page='write';render();toast(`Loaded ${n} stor${n===1?'y':'ies'}`);
+  }).finally(()=>{input.value=''});
+};
 render();
 </script>
 </body>

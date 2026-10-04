@@ -54,6 +54,30 @@ test('list names map to stages, unknown lists to null', () => {
   assert.equal(stageOf('Client Feedback'), null);
 });
 
+test('list names that only contain a stage word inside another word are not that stage', () => {
+  assert.equal(stageOf('Abandoned'), null);
+  assert.equal(stageOf('Evaluation'), null);
+  assert.equal(stageOf('Accepted by client'), null);
+  assert.equal(stageOf('Latest updates'), null);
+  assert.notEqual(stageOf('Not started'), 'doing');
+  assert.equal(stageOf('Started'), 'doing');
+  assert.equal(stageOf('UAT'), 'testing');
+  assert.equal(stageOf('Done'), 'done');
+});
+
+test('a 429 from Trello is retried, then the write goes through', async () => {
+  const b = board([[7, 'dg']]);
+  let busy = 1, waits = 0;
+  const fetchImpl = async (url, o = {}) => {
+    if ((o.method || 'GET') === 'POST' && /comments$/.test(url) && busy-- > 0) return { ok: false, status: 429, text: async () => 'slow down', json: async () => ({}) };
+    return b.fetchImpl(url, o);
+  };
+  const ev = { workflow_run: { name: 'CI', conclusion: 'success', html_url: 'u', head_branch: 'feature/US-07-x', display_title: 'US-07' } };
+  await run({ env: ENV, eventName: 'workflow_run', event: ev, fetchImpl, log, sleep: async () => { waits++; } });
+  assert.equal(waits, 1);
+  assert.equal(b.writes.length, 1);
+});
+
 test('branch created moves a backlog card to Doing, not a card already further along', async () => {
   for (const from of ['pb', 'sb']) {
     const b = board([[7, from]]);

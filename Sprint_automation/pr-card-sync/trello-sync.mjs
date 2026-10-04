@@ -23,10 +23,10 @@ const ID_RE = /\bUS-(\d+)\b/gi;
 const STAGES = [
   ['backlog', /product backlog|icebox|ideas|inbox/i],
   ['sprint', /sprint backlog|selected|up next|to ?do|backlog/i],
-  ['doing', /doing|in progress|wip|working|in development|in dev\b|started/i],
+  ['doing', /doing|in progress|wip|working|in development|in dev\b|(?<!not )started/i],
   ['review', /review|pull request|\bprs?\b/i],
-  ['testing', /test|\bqa\b|verif|accept|uat/i],
-  ['done', /done|complete|finished|shipped|released/i],
+  ['testing', /\btest(ing|s)?\b|\bqa\b|\bverif|\buat\b/i],
+  ['done', /\bdone\b|complete|finished|shipped|released/i],
 ];
 
 export const code = (n) => 'US-' + String(n).padStart(2, '0');
@@ -135,7 +135,7 @@ export function plan(eventName, ev, opts = {}) {
   return null;
 }
 
-export async function run({ env, eventName, event, fetchImpl = fetch, log = console.log }) {
+export async function run({ env, eventName, event, fetchImpl = fetch, log = console.log, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const { TRELLO_KEY: key, TRELLO_TOKEN: token, TRELLO_BOARD_ID: board } = env;
   if (!key || !token || !board) {
     log('Trello secrets are not set (TRELLO_KEY, TRELLO_TOKEN, TRELLO_BOARD_ID); skipping.');
@@ -151,12 +151,19 @@ export async function run({ env, eventName, event, fetchImpl = fetch, log = cons
   async function call(method, path, params = {}) {
     if (dry && method !== 'GET') { log(`[dry run] ${method} ${path} ${JSON.stringify(params)}`); return {}; }
     const auth = { key, token };
-    const res = method === 'GET'
-      ? await fetchImpl(`${API}${path}?${new URLSearchParams({ ...auth, ...params })}`)
-      : await fetchImpl(`${API}${path}`, {
-          method, headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...auth, ...params }),
-        });
+    // Trello answers 429 when it is busy: wait and try again, up to 4 times.
+    let res;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      res = method === 'GET'
+        ? await fetchImpl(`${API}${path}?${new URLSearchParams({ ...auth, ...params })}`)
+        : await fetchImpl(`${API}${path}`, {
+            method, headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...auth, ...params }),
+          });
+      if (res.status !== 429) break;
+      log(`Trello is busy (429); waiting before trying ${method} ${path} again.`);
+      await sleep(10500);
+    }
     if (!res.ok) throw new Error(`Trello ${method} ${path} failed: ${res.status} ${(await res.text()).slice(0, 120)}`);
     return res.json();
   }
