@@ -4,7 +4,15 @@ Write your sprint's user stories once, then get them onto your Trello board as f
 
 Trello already has templates and CSV import. What this adds is the course workflow in one place: a fixed story format (role, want, why, criteria, tasks), a Review report that reads the board, and a PR sync that moves cards for you. Not on Trello? Export the stories as a CSV laid out for Jira, Linear or Notion.
 
-**[Download the Windows installer](https://github.com/Boci0/sprint-kit/releases/latest)**: open the page, download the file ending in `x64-setup.exe`, and run it. No account, Node, Rust or Git needed. (Windows may say "Windows protected your PC" because the installer isn't code-signed: click **More info**, then **Run anyway**.)
+<p align="center">
+  <a href="https://github.com/Boci0/sprint-kit/releases/latest"><img alt="Download the Windows installer" src="https://img.shields.io/badge/Download-Windows%20installer-2563eb?style=for-the-badge&logo=windows&logoColor=white"></a>
+</p>
+
+On the page that opens, download the file ending in `x64-setup.exe` and run it. No account, Node, Rust or Git needed. (Windows may say "Windows protected your PC" because the installer isn't code-signed: click **More info**, then **Run anyway**.)
+
+<p align="center">
+  <img alt="Writing user stories in Sprint Kit" src="https://raw.githubusercontent.com/Boci0/sprint-kit/main/Sprint_automation/docs/write.png" width="900">
+</p>
 
 ## What it does
 
@@ -14,6 +22,20 @@ Trello already has templates and CSV import. What this adds is the course workfl
 | **Push to Trello** | Creates the cards for you. Safe to re-run: it resumes an interrupted push and never duplicates a card. |
 | **Review report** | Reads the board and summarises the sprint: points done, progress by list and owner, carry-over and problems. |
 | **PR to card sync** | A GitHub Action for your code repo that moves cards when branches and pull requests change. |
+
+## A quick look
+
+**1. Write the stories**, one by one or pasted in bulk. Each story has a role, a want, a reason, acceptance criteria and tasks.
+
+**2. Push them to Trello.** Pick the board and a list for each story, then create every card in one go.
+
+<p align="center"><img alt="Pushing stories to a Trello board" src="https://raw.githubusercontent.com/Boci0/sprint-kit/main/Sprint_automation/docs/push.png" width="900"></p>
+
+**3. Get the Review report** straight from the board: points done, progress by list and owner, what carries over, and what needs attention.
+
+<p align="center"><img alt="The Sprint review report" src="https://raw.githubusercontent.com/Boci0/sprint-kit/main/Sprint_automation/docs/report.png" width="900"></p>
+
+*The screenshots use made-up sample data.*
 
 Your Trello key and token are stored in **Windows Credential Manager** in the desktop app.
 
