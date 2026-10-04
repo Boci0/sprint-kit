@@ -661,7 +661,10 @@ function analyse(){
   const ln=Object.fromEntries(TB.lists.map(l=>[l.id,l.name]));
   const idx=Object.fromEntries(TB.lists.map((l,i)=>[l.id,i]));
   const defScope=TB.lists.filter(l=>!/product backlog|feedback/i.test(l.name)).map(l=>l.id);
-  const scope=T.rl?T.rl.filter(id=>ln[id]):defScope;
+  // The lists that count as this sprint are remembered per board. The older single setting (T.rl) is used only for ids that exist
+  // on this board, and an empty result falls back to the default so the report is never silently blank.
+  const saved=((T.rlBy&&T.rlBy[T.boardId])||T.rl||[]).filter(id=>ln[id]);
+  const scope=saved.length?saved:defScope;
   const now=Date.now();
   const all=R.cards.map(c=>{
     const items=(c.checklists||[]).flatMap(k=>k.checkItems);
@@ -798,7 +801,7 @@ function bind(){
   if($('#rep-load'))$('#rep-load').onclick=loadReport;
   if($('#sc-go'))$('#sc-go').onclick=closeSprint;
   document.querySelectorAll('[data-rl]').forEach(c=>c.onchange=()=>{
-    T.rl=[...document.querySelectorAll('[data-rl]')].filter(x=>x.checked).map(x=>x.dataset.rl);saveT();render()});
+    (T.rlBy=T.rlBy||{})[T.boardId]=[...document.querySelectorAll('[data-rl]')].filter(x=>x.checked).map(x=>x.dataset.rl);saveT();render()});
   if($('#rep-dl'))$('#rep-dl').onclick=()=>saveFile('sprint-review.md',mdReport(analyse()),'text/markdown;charset=utf-8','Report saved.');
   if($('#review'))$('#review').onchange=e=>{S.review=e.target.value;save();render()};
   if($('#bulk-go'))$('#bulk-go').onclick=()=>{
