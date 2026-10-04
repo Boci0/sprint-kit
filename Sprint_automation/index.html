@@ -423,6 +423,7 @@ function memberIds(owner){
 // Which Trello list a story goes to: its own "list" (matched by name) or the default list from Step 2b.
 // A named list the board lacks is created only if the option is on; otherwise the story is skipped (the same stories can be bound to several boards).
 function listFor(s){
+  if(s.skip)return{skip:true,chosen:true};
   const def=TB.lists.find(l=>l.id===T.listId)||TB.lists[0],want=String(s.list||'').trim().toLowerCase();
   if(!want)return{id:def.id,name:def.name};
   const l=TB.lists.find(l=>l.name.toLowerCase()===want)||TB.lists.find(l=>l.name.toLowerCase().includes(want));
@@ -495,7 +496,7 @@ async function pushAll(){
           let lab=TB.labels.find(l=>l.name===lname);
           if(!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
           dest=listFor(s);
-          if(dest.skip){say(`⏭ ${s.id}: no list called “${dest.miss}” on this board, so it was not pushed`);skipped++;continue}
+          if(dest.skip){say(dest.chosen?`⏭ ${s.id}: skipped, as you chose`:`⏭ ${s.id}: no list called “${dest.miss}” on this board, so it was not pushed`);skipped++;continue}
           if(dest.make){const nl=await tr('POST','/lists',{name:dest.name,idBoard:T.boardId,pos:'bottom'});TB.lists.push(nl);say(`Created list “${nl.name}”`);dest={id:nl.id,name:nl.name}}
           if(dest.miss)say(`⚠ ${s.id}: no list called “${dest.miss}”, so it goes to ${dest.name}`);
           const p={idList:dest.id,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
@@ -511,11 +512,11 @@ async function pushAll(){
       s.checkDone=true;save();
       say(`✓ ${s.id} ${s.title}`+(s.cardList?` → ${s.cardList}`:''));await sleep(150);
     }
-    say(`\nDone: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+(skipped?`, ${skipped} skipped (list not on this board)`:'')+'.');
+    say(`\nDone: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+(skipped?`, ${skipped} skipped`:'')+'.');
   }catch(e){failed=e.message;say('\n⚠ Stopped: '+e.message+'\nProgress is saved. Click the button again to carry on where it stopped. Nothing will be duplicated.')}
   TB.busy=false;
   TB.result=failed?{ok:false,text:'Stopped: '+failed+' Progress is saved; click the button again to carry on.'}
-    :{ok:!(skipped&&!created),text:`Done: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+(skipped?`, ${skipped} skipped because their list is not on this board`:'')+'.'};
+    :{ok:!(skipped&&!created),text:`Done: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+(skipped?`, ${skipped} skipped`:'')+'.'};
   const keep=log.textContent;render();if($('#log'))$('#log').textContent=keep;
 }
 function pPush(){
@@ -526,9 +527,10 @@ function pPush(){
   const skipN=toMake.filter(s=>listFor(s).skip).length,ready=Math.max(0,pending-(T.redo?0:skipN));
   const defList=TB.lists.find(l=>l.id===T.listId)||TB.lists[0]||{name:''};
   const picker=toMake.length?'<div style="margin:8px 0 14px">'+toMake.map(s=>{
-    const d=listFor(s),bad=d.make||d.miss,cur=bad?String(s.list).trim():(s.list?d.name:'');
+    const d=listFor(s),bad=d.make||d.miss,cur=d.chosen?'__skip__':bad?String(s.list).trim():(s.list?d.name:'');
     const opts=[`<option value="" ${cur===''?'selected':''}>Default list (${esc(defList.name)})</option>`,
-      ...TB.lists.map(l=>`<option value="${esc(l.name)}" ${cur===l.name?'selected':''}>${esc(l.name)}</option>`)];
+      ...TB.lists.map(l=>`<option value="${esc(l.name)}" ${cur===l.name?'selected':''}>${esc(l.name)}</option>`),
+      `<option value="__skip__" ${cur==='__skip__'?'selected':''}>Skip this story (don't push)</option>`];
     if(bad)opts.push(`<option value="${esc(cur)}" selected>${esc(cur)} ${d.make?'(new list)':'(not found, will be skipped)'}</option>`);
     return `<div class="item pick"><div class="grow"><b>${esc(s.id)}</b> ${esc(s.title)}</div><select data-pick="${S.stories.indexOf(s)}" ${TB.busy?'disabled':''}>${opts.join('')}</select></div>`}).join('')+'</div>':'';
   const where=byList.size?(byList.size===1?` in ${boardName?boardName+' → ':''}${[...byList.keys()][0]}`:` in ${byList.size} lists`):'';
@@ -554,7 +556,7 @@ function pPush(){
     <label style="font-weight:400"><input type="checkbox" id="t-ml" ${T.makeLists?'checked':''} style="width:auto"> Create lists that a story names but the board doesn't have <small>(off: those stories are skipped)</small></label>
     <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label></div>`:''}
   ${connected&&TB.lists.length?`<div class="panel"><h2>4. Push</h2>
-    <p>${pending} of ${S.stories.length} stories not on this board yet. Each becomes a card with its description, due date, priority label and checklist.${skipN?` <b>${skipN} will be skipped because their list isn't on this board.</b>`:''}${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
+    <p>${pending} of ${S.stories.length} stories not on this board yet. Each becomes a card with its description, due date, priority label and checklist.${skipN?` <b>${skipN} will be skipped (no list on this board, or you chose to skip).</b>`:''}${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
     ${picker}
     <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s)${where||' in Trello'}`:([ready&&`create ${ready} card(s)${where}`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
     ${TB.result?`<div class="banner ${TB.result.ok?'ok':'err'}">${esc(TB.result.text)}</div>`:''}<pre id="log" style="min-height:40px"></pre>
@@ -682,7 +684,10 @@ function bind(){
   if($('#t-list'))$('#t-list').onchange=e=>{T.listId=e.target.value;saveT()};
   if($('#t-member'))$('#t-member').onchange=e=>{T.memberId=e.target.value;saveT()};
   if($('#t-mk'))$('#t-mk').onchange=e=>{T.makeLabels=e.target.checked;saveT()};
-  document.querySelectorAll('[data-pick]').forEach(s=>s.onchange=()=>{S.stories[+s.dataset.pick].list=s.value;save();render()});
+  document.querySelectorAll('[data-pick]').forEach(s=>s.onchange=()=>{
+    const st=S.stories[+s.dataset.pick];
+    if(s.value==='__skip__')st.skip=true;else{delete st.skip;st.list=s.value}
+    save();render()});
   if($('#t-ml'))$('#t-ml').onchange=e=>{T.makeLists=e.target.checked;saveT();render()};
   if($('#t-redo'))$('#t-redo').onchange=e=>{T.redo=e.target.checked;saveT();render()};
   if($('#go'))$('#go').onclick=pushAll;
