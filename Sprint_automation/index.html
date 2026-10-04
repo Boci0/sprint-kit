@@ -168,6 +168,8 @@ function pWrite(){
     ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}</div></div>
       <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('')||'<p class="mute">Nothing yet. Add your first story above.</p>'}
     ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
+    ${S.stories.length?`<div class="mute" style="margin-top:10px">Use another tool? Export:
+      <button class="btn link" data-exp="csv">Download CSV</button><button class="btn link" data-exp="md">Download Markdown</button><button class="btn link" data-exp="copycsv">Copy CSV</button><button class="btn link" data-exp="copymd">Copy Markdown</button></div>`:''}
   </div>
   </div>
   <div class="stack">
@@ -214,6 +216,32 @@ function parseStories(text){
     s.ac=ac.join('\n');s.tasks=tk.join('\n');return s;
   });
   return{stories:out,skipped};
+}
+
+// Export, so the stories can go into any other tool (most tools can import a CSV file)
+const PRI_LABEL={Must:'Must have',Should:'Should have',Could:'Could have',"Won't":"Won't (this time)"};
+const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+function storiesCSV(){
+  const head=['ID','Title','Summary','Description','Priority','Points','Owner','Acceptance criteria','Tasks'];
+  const rows=S.stories.map(s=>[s.id,s.title,cardTitle(s),cardDesc(s),PRI_LABEL[s.pri]||s.pri,s.points,s.owner,lines(s.ac).join('\n'),lines(s.tasks).join('\n')]);
+  return String.fromCharCode(0xFEFF)+[head,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n');
+}
+function storiesMarkdown(){
+  return '# Sprint stories\n\n'+S.stories.map(s=>{
+    const t=lines(s.tasks);
+    return `## ${cardTitle(s)}\n\n${cardDesc(s)}`+(t.length?'\n\n**Tasks**\n'+t.map(x=>'- '+x).join('\n'):'');
+  }).join('\n\n');
+}
+function saveFile(name,text,type){
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function exportStories(kind){
+  const day=new Date().toISOString().slice(0,10);
+  if(kind==='csv'){saveFile(`stories-${day}.csv`,storiesCSV(),'text/csv;charset=utf-8');toast('CSV saved. Most tools can import it.')}
+  else if(kind==='md'){saveFile(`stories-${day}.md`,storiesMarkdown(),'text/markdown;charset=utf-8');toast('Markdown file saved.')}
+  else if(kind==='copycsv')copy(storiesCSV().slice(1),null,'CSV copied. Paste it into a spreadsheet or an import box.');
+  else copy(storiesMarkdown(),null,'Markdown copied.');
 }
 
 function pCopy(){
@@ -554,6 +582,7 @@ function bind(){
     save();render();
     toast(`Imported ${fresh.length} stor${fresh.length===1?'y':'ies'}`+(dupes?`, ${dupes} skipped (title already in your list)`:'')+(skipped?`, ${skipped} line${skipped===1?'':'s'} not understood`:''));
   };
+  document.querySelectorAll('[data-exp]').forEach(b=>b.onclick=()=>exportStories(b.dataset.exp));
   if($('#tpl'))$('#tpl').onclick=e=>copy($('#tpl-text').textContent,e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
   if($('#cancel'))$('#cancel').onclick=()=>{editing=null;render()};
   if($('#save'))$('#save').onclick=()=>{
