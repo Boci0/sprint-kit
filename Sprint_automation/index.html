@@ -233,8 +233,7 @@ function pWrite(){
     ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}${x.list?' · → '+esc(x.list):''}</div></div>
       <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('')||'<p class="mute">Nothing yet. Add your first story above.</p>'}
     ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
-    ${S.stories.length?`<div class="mute" style="margin-top:10px">Use another tool? Export:
-      <button class="btn link" data-exp="jira">Jira CSV</button><button class="btn link" data-exp="linear">Linear CSV</button><button class="btn link" data-exp="notion">Notion CSV</button><button class="btn link" data-exp="csv">Download CSV</button><button class="btn link" data-exp="md">Download Markdown</button><button class="btn link" data-exp="copycsv">Copy CSV</button><button class="btn link" data-exp="copymd">Copy Markdown</button></div>`:''}
+    ${S.stories.length?`<div class="mute" style="margin-top:10px">Use another tool? Export as <select id="exp-fmt" style="width:auto;display:inline-block">${EXP_FORMATS.map(([k,l])=>`<option value="${k}" ${expFmt===k?'selected':''}>${l}</option>`).join('')}</select> <button class="btn link" id="exp-dl">Download</button><button class="btn link" id="exp-copy">Copy</button></div>`:''}
   </div>
   </div>
   <div class="stack">
@@ -304,13 +303,15 @@ function saveFile(name,text,type){
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
-function exportStories(kind){
-  const day=new Date().toISOString().slice(0,10);
-  if(kind==='csv'){saveFile(`stories-${day}.csv`,storiesCSV(),'text/csv;charset=utf-8');toast('CSV saved. Most tools can import it.')}
-  else if(CSV_FORMATS[kind]){saveFile(`stories-${kind}-${day}.csv`,storiesCSV(kind),'text/csv;charset=utf-8');toast(`${kind[0].toUpperCase()+kind.slice(1)} CSV saved. Use that tool's CSV import and match the columns.`)}
-  else if(kind==='md'){saveFile(`stories-${day}.md`,storiesMarkdown(),'text/markdown;charset=utf-8');toast('Markdown file saved.')}
-  else if(kind==='copycsv')copy(storiesCSV().slice(1),null,'CSV copied. Paste it into a spreadsheet or an import box.');
-  else copy(storiesMarkdown(),null,'Markdown copied.');
+const EXP_FORMATS=[['csv','Generic CSV'],['jira','Jira CSV'],['linear','Linear CSV'],['notion','Notion CSV'],['md','Markdown']];
+let expFmt='csv';
+function exportStories(kind,copyIt){
+  const day=new Date().toISOString().slice(0,10),label=(EXP_FORMATS.find(f=>f[0]===kind)||[])[1]||'Export';
+  if(kind==='md'){
+    if(copyIt)copy(storiesMarkdown(),null,'Markdown copied.');
+    else{saveFile(`stories-${day}.md`,storiesMarkdown(),'text/markdown;charset=utf-8');toast('Markdown file saved.')}
+  }else if(copyIt)copy(storiesCSV(kind).slice(1),null,`${label} copied. Paste it into a spreadsheet or an import box.`);
+  else{saveFile(`stories-${kind==='csv'?'':kind+'-'}${day}.csv`,storiesCSV(kind),'text/csv;charset=utf-8');toast(`${label} saved.`+(kind==='csv'?' Most tools can import it.':" Use that tool's CSV import and match the columns."))}
 }
 
 function pCopy(){
@@ -680,7 +681,7 @@ function bind(){
     save();render();
     toast(`Imported ${fresh.length} stor${fresh.length===1?'y':'ies'}`+(dupes?`, ${dupes} skipped (title already in your list)`:'')+(skipped?`, ${skipped} line${skipped===1?'':'s'} not understood`:''));
   };
-  document.querySelectorAll('[data-exp]').forEach(b=>b.onclick=()=>exportStories(b.dataset.exp));
+  if($('#exp-fmt')){$('#exp-fmt').onchange=e=>{expFmt=e.target.value};$('#exp-dl').onclick=()=>exportStories(expFmt,false);$('#exp-copy').onclick=()=>exportStories(expFmt,true)}
   if($('#tpl'))$('#tpl').onclick=e=>copy(TEMPLATE_TEXT,e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
   document.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{const f=$('#f-list');f.value=b.dataset.chip;f.focus()});
   if($('#cancel'))$('#cancel').onclick=()=>{editing=null;render()};
