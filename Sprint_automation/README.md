@@ -8,7 +8,7 @@ Write your user stories once, then get them into Trello as cards: with the descr
 
 Open that page and, under **Assets**, download the file ending in `x64-setup.exe`. Then run it.
 
-- This repository is private, so you need a GitHub account that has been given access to it. If the link shows a 404, you are not signed in or have not been added.
+- This repository is public, so you do not need a GitHub account to download the installer.
 - Windows may show **"Windows protected your PC"** because the installer is not code-signed. Click **More info**, then **Run anyway**.
 - You do not need to install Node, Rust or Git. Windows 10 and 11 already include what the app needs.
 
