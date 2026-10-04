@@ -6,44 +6,52 @@
 <title>Sprint Kit for Trello</title>
 <style>
 :root{--bg:#f4f5f7;--card:#fff;--ink:#172b4d;--mute:#6b778c;--line:#dfe1e6;--accent:#0c66e4;--ok:#1f845a}
-@media (prefers-color-scheme:dark){:root{--bg:#1d2125;--card:#22272b;--ink:#dee4ea;--mute:#9fadbc;--line:#38414a;--accent:#579dff;--ok:#4bce97}}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1d2125;--card:#22272b;--ink:#dee4ea;--mute:#9fadbc;--line:#38414a;--accent:#579dff;--ok:#4bce97}}
+:root[data-theme=dark]{--bg:#1d2125;--card:#22272b;--ink:#dee4ea;--mute:#9fadbc;--line:#38414a;--accent:#579dff;--ok:#4bce97}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,Segoe UI,sans-serif}
-.wrap{max-width:760px;margin:0 auto;padding:18px 16px 60px}
-h1{font-size:20px;margin:0 0 4px}
-.sub{color:var(--mute);margin:0 0 16px}
-.steps{display:flex;gap:8px;margin-bottom:16px}
-.steps button{flex:1;padding:10px;border:1px solid var(--line);background:var(--card);color:var(--mute);border-radius:8px;cursor:pointer;font:inherit;font-weight:600;text-align:left}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,sans-serif}
+.wrap{max-width:1280px;margin:0 auto;padding:12px 16px 32px}
+h1{font-size:20px;margin:0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px}
+#theme{padding:5px 11px}
+.sub{color:var(--mute);margin:0 0 10px}
+.steps{display:flex;gap:8px;margin-bottom:12px}
+.steps button{flex:1;padding:7px 12px;border:1px solid var(--line);background:var(--card);color:var(--mute);border-radius:8px;cursor:pointer;font:inherit;font-weight:600;text-align:left}
 .steps button.on{border-color:var(--accent);color:var(--ink);box-shadow:inset 0 -3px 0 var(--accent)}
 .steps b{display:block;font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
-.panel h2{font-size:15px;margin:0 0 10px}
-label{display:block;font-weight:600;margin:12px 0 3px}
+#main{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;align-items:start}
+#main>:not(.panel):not(.stack),.wide{grid-column:1/-1}
+.stack{display:grid;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
+.panel h2{font-size:15px;margin:0 0 8px}
+label{display:block;font-weight:600;margin:8px 0 2px}
 label small{font-weight:400;color:var(--mute)}
 input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
-textarea{resize:vertical;min-height:64px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+textarea{resize:vertical;min-height:52px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(min-width:720px){.span2{grid-column:span 2}}
 .btn{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600}
 .btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn.link{border:0;background:none;color:var(--accent);padding:2px 6px}
 .btn.done{background:var(--ok);border-color:var(--ok);color:#fff}
-.item{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.item{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}
 .item:first-child{border-top:0}
 .grow{flex:1;min-width:0}
 .mute{color:var(--mute);font-size:13px}
 ol.how{margin:0 0 12px;padding-left:20px}
 ol.how li{margin:4px 0}
 .big{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;white-space:pre-wrap;margin:8px 0 0;font:13px/1.5 ui-monospace,Consolas,monospace;max-height:220px;overflow:auto}
-.foot{margin-top:24px;display:flex;gap:14px;flex-wrap:wrap}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;white-space:pre-wrap;margin:8px 0 0;font:13px/1.5 ui-monospace,Consolas,monospace;max-height:180px;overflow:auto}
+.foot{margin-top:14px;display:flex;gap:14px;flex-wrap:wrap}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;opacity:0;transition:.2s;pointer-events:none}
 #toast.on{opacity:1}
-@media(max-width:560px){.two{grid-template-columns:1fr}}
+@media(max-width:560px){.two,.three{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Sprint Kit for Trello</h1>
+  <div class="top"><h1>Sprint Kit for Trello</h1><button class="btn" id="theme" title="Switch between automatic, light and dark"></button></div>
   <p class="sub">Write your user stories here, then copy them into Trello.</p>
   <div class="steps" id="steps"></div>
   <div id="main"></div>
@@ -98,29 +106,31 @@ function render(){
 function pWrite(){
   const s=editing!==null?S.stories[editing]:{title:'',role:'',want:'',why:'',ac:'',points:'',pri:'Must',tasks:'',owner:''};
   return `
-  <div class="panel">
+  <div class="panel span2">
     <h2>${editing!==null?'Edit '+esc(s.id):'Add a story'}</h2>
     <label>Story title <small>short, e.g. “Log in with UNIMAS email”</small></label>
     <input id="f-title" value="${esc(s.title)}">
-    <label>Who is it for? <small>e.g. a student</small></label>
-    <input id="f-role" value="${esc(s.role)}">
-    <label>What do they want to do?</label>
-    <input id="f-want" value="${esc(s.want)}">
-    <label>Why? <small>the benefit</small></label>
-    <input id="f-why" value="${esc(s.why)}">
-    <label>How do we know it's done? <small>one line each, e.g. “Given a valid account, when I log in, then I see Home in 2 seconds”</small></label>
-    <textarea id="f-ac">${esc(s.ac)}</textarea>
+    <div class="three">
+      <div><label>Who is it for? <small>e.g. a student</small></label><input id="f-role" value="${esc(s.role)}"></div>
+      <div><label>What do they want to do?</label><input id="f-want" value="${esc(s.want)}"></div>
+      <div><label>Why? <small>the benefit</small></label><input id="f-why" value="${esc(s.why)}"></div>
+    </div>
     <div class="two">
+      <div><label>How do we know it's done? <small>one line each, e.g. “Given a valid account, when I log in, then I see Home in 2 seconds”</small></label>
+        <textarea id="f-ac" rows="3">${esc(s.ac)}</textarea></div>
+      <div><label>Tasks <small>optional, one per line — if empty, the “done” lines become the checklist</small></label>
+        <textarea id="f-tasks" rows="3">${esc(s.tasks)}</textarea></div>
+    </div>
+    <div class="three">
       <div><label>Points <small>effort, optional</small></label><input id="f-points" type="number" min="0" value="${esc(s.points)}"></div>
       <div><label>Priority</label><select id="f-pri">${[['Must','Must have'],['Should','Should have'],['Could','Could have'],["Won't","Won't (this time)"]].map(([v,l])=>`<option value="${v}" ${s.pri===v?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div><label>Owner <small>Trello name or @username, comma-separate for several</small></label>
+        <input id="f-owner" list="owners" value="${esc(s.owner)}" autocomplete="off">
+        <datalist id="owners">${[...new Set([...TB.members.map(m=>m.fullName||m.username),...S.stories.flatMap(x=>String(x.owner||'').split(',').map(n=>n.trim()))].filter(Boolean))].map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
     </div>
-    <label>Owner <small>who is accountable; use the name or username they have in Trello (comma-separate for more than one)</small></label>
-    <input id="f-owner" list="owners" value="${esc(s.owner)}" autocomplete="off">
-    <datalist id="owners">${[...new Set([...TB.members.map(m=>m.fullName||m.username),...S.stories.flatMap(x=>String(x.owner||'').split(',').map(n=>n.trim()))].filter(Boolean))].map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
-    <label>Tasks <small>optional,</small> one per line — if empty, the “done” lines are used as the checklist</small></label>
-    <textarea id="f-tasks">${esc(s.tasks)}</textarea>
     <div class="big"><button class="btn p" id="save">${editing!==null?'Save changes':'Add story'}</button>${editing!==null?'<button class="btn" id="cancel">Cancel</button>':''}</div>
   </div>
+  <div class="stack">
   <div class="panel">
     <h2>Your stories (${S.stories.length})</h2>
     ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}</div></div>
@@ -139,8 +149,9 @@ ac: Given no matches, when I search, then I see “No results”
 tasks: Search box added
 tasks: 3 widget tests pass in CI</pre>
     <p class="mute">You can write the story as one “As a …, I want …, so that …” line, or as separate <code>role:</code> <code>want:</code> <code>why:</code> lines. Repeat <code>ac:</code> and <code>tasks:</code> for more lines. <code>pri:</code> is Must, Should, Could or Won't.</p>
-    <textarea id="bulk" style="min-height:150px" placeholder="Paste stories here"></textarea>
+    <textarea id="bulk" style="min-height:110px" placeholder="Paste stories here"></textarea>
     <div class="big"><button class="btn p" id="bulk-go">Import stories</button></div>
+  </div>
   </div>`;
 }
 
@@ -368,10 +379,10 @@ function pReport(){
   <div class="panel"><h2>By list</h2>${tbl(['List','Cards','Points'],a.byList.map(l=>[l.name,l.n,l.pts]))}</div>
   <div class="panel"><h2>By owner</h2>${tbl(['Owner','Cards done / total','Points done / total'],Object.entries(a.owners).map(([o,r])=>[o,`${r.dn} / ${r.n}`,`${r.dp} / ${r.p}`]))}
     <p class="mute">A card with two owners counts for each of them.</p></div>
-  <div class="panel"><h2>Carry over to the next sprint (${a.open.length})</h2>${a.open.length?tbl(['Card','List','Owner','Checklist'],a.open.map(c=>[c.name,c.list,c.owners.join(', ')||'—',c.ci.total?`${c.ci.done}/${c.ci.total}`:'—'])):'<p class="mute">Nothing — everything is done.</p>'}</div>
+  <div class="panel wide"><h2>Carry over to the next sprint (${a.open.length})</h2>${a.open.length?tbl(['Card','List','Owner','Checklist'],a.open.map(c=>[c.name,c.list,c.owners.join(', ')||'—',c.ci.total?`${c.ci.done}/${c.ci.total}`:'—'])):'<p class="mute">Nothing — everything is done.</p>'}</div>
   <div class="panel"><h2>Needs attention (${a.flags.length})</h2>${a.flags.length?'<ul style="margin:0;padding-left:20px">'+a.flags.map(f=>`<li>${esc(f)}</li>`).join('')+'</ul>':'<p class="mute">No problems found.</p>'}</div>
   ${a.feedback.length?`<div class="panel"><h2>Client feedback (${a.feedback.length})</h2><ul style="margin:0;padding-left:20px">${a.feedback.map(c=>`<li>${esc(c.name)}</li>`).join('')}</ul></div>`:''}
-  <div class="panel"><h2>Copy for your Review card or report</h2>
+  <div class="panel wide"><h2>Copy for your Review card or report</h2>
     <div class="big" style="margin:0"><button class="btn p" data-copy="${esc(md).replace(/\n/g,'&#10;')}">Copy as text</button><button class="btn" id="rep-dl">Download .md</button></div>
     <pre>${esc(md)}</pre></div>`;
 }
@@ -425,6 +436,13 @@ function bind(){
     editing=null;save();render();toast('Saved');scrollTo(0,0);
   };
 }
+const THEME_KEY='sprintkit.theme',THEMES=['auto','light','dark'];
+let theme='auto';try{theme=localStorage.getItem(THEME_KEY)||'auto'}catch(e){}
+function applyTheme(){const t=theme;
+  if(t==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=t;
+  $('#theme').textContent='Theme: '+t[0].toUpperCase()+t.slice(1)}
+$('#theme').onclick=()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%THEMES.length];try{localStorage.setItem(THEME_KEY,theme)}catch(e){}applyTheme()};
+applyTheme();
 // In the desktop (Tauri) app, open external links in the default browser
 document.addEventListener('click',e=>{
   const a=e.target.closest('a[href^="http"]');
