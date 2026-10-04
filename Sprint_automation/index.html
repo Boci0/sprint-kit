@@ -32,6 +32,7 @@ label small{font-weight:400;color:var(--mute)}
 input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
 textarea{resize:vertical;min-height:52px}
 input:not([type=checkbox]):not([type=file]),select{height:36px}
+select{padding-top:0;padding-bottom:0;line-height:1.5}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}
 .three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-items:end}
 @media(min-width:720px){.span2{grid-column:span 2}}
@@ -65,6 +66,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 .item{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}
 .item:first-child{border-top:0}
 .grow{flex:1;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.chips .btn{padding:3px 10px;border-radius:999px;font-weight:500;font-size:12px}
+.pick{flex-wrap:wrap}.pick .grow{flex:1 1 170px}.pick select{width:auto;min-width:200px;max-width:100%;flex:0 1 auto;padding-right:28px;text-overflow:clip}
 .mute{color:var(--mute);font-size:13px}
 ol.how{margin:0 0 12px;padding-left:20px}
 ol.how li{margin:4px 0}
@@ -78,11 +81,23 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:
 :root{--g1:rgba(12,102,228,.17);--g2:rgba(139,92,246,.14);--g3:rgba(31,132,90,.11)}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--g1:rgba(87,157,255,.20);--g2:rgba(167,139,250,.16);--g3:rgba(75,206,151,.12)}}
 :root[data-theme=dark]{--g1:rgba(87,157,255,.20);--g2:rgba(167,139,250,.16);--g3:rgba(75,206,151,.12)}
-body::before{content:'';position:fixed;inset:-20%;z-index:-1;pointer-events:none;
+body::before{content:'';position:fixed;inset:-20%;z-index:-1;pointer-events:none;will-change:transform;
   background:radial-gradient(35% 40% at 15% 20%,var(--g1),transparent 70%),radial-gradient(30% 35% at 85% 15%,var(--g2),transparent 70%),radial-gradient(35% 40% at 60% 90%,var(--g3),transparent 70%);
-  animation:drift 28s ease-in-out infinite alternate}
-@keyframes drift{from{transform:translate3d(-2%,-1%,0) scale(1)}to{transform:translate3d(3%,2%,0) scale(1.08)}}
-@media (prefers-reduced-motion:reduce){body::before{animation:none}}
+  animation:drift 16s ease-in-out infinite alternate}
+body::after{content:'';position:fixed;inset:-20%;z-index:-1;pointer-events:none;will-change:transform;
+  background:radial-gradient(30% 35% at 80% 70%,var(--g4),transparent 70%),radial-gradient(28% 32% at 25% 75%,var(--g5),transparent 70%),radial-gradient(25% 30% at 50% 35%,var(--g2),transparent 70%);
+  animation:drift2 21s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translate3d(-6%,-4%,0) rotate(-3deg) scale(1)}to{transform:translate3d(7%,5%,0) rotate(4deg) scale(1.18)}}
+@keyframes drift2{from{transform:translate3d(6%,4%,0) rotate(3deg) scale(1.1)}to{transform:translate3d(-7%,-5%,0) rotate(-4deg) scale(.95)}}
+@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
+html.idle body::before,html.idle body::after{animation-play-state:paused}
+/* Glass cards: see-through with a soft blur. Blur is costly, so it is small, and it is dropped on pages with many cards. */
+.panel{background:color-mix(in srgb,var(--card) 64%,transparent);-webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);
+  border-color:rgba(255,255,255,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 1px 2px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.07)}
+:root[data-theme=dark] .panel{border-left-color:rgba(255,255,255,.1);border-right-color:rgba(255,255,255,.1);border-bottom-color:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.25)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .panel{border-left-color:rgba(255,255,255,.1);border-right-color:rgba(255,255,255,.1);border-bottom-color:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.25)}}
+#main.lite .panel{-webkit-backdrop-filter:none;backdrop-filter:none;background:color-mix(in srgb,var(--card) 90%,transparent)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.panel{background:var(--card)}}
 .panel{box-shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.05)}
 h1{background:linear-gradient(90deg,var(--accent),#8b5cf6);-webkit-background-clip:text;background-clip:text;color:transparent}
 .steps button{transition:border-color .15s,box-shadow .15s}
@@ -91,9 +106,9 @@ h1{background:linear-gradient(90deg,var(--accent),#8b5cf6);-webkit-background-cl
 #bulk{font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.55}
 a{color:var(--accent)}
 /* Accent touches: each step has its own colour, and the panels carry the colour of the step you are on */
-:root{--c1:#0c66e4;--c2:#0891b2;--c3:#7c3aed;--c4:#1f845a;--g1:rgba(12,102,228,.22);--g2:rgba(139,92,246,.18);--g3:rgba(31,132,90,.14)}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--c1:#579dff;--c2:#22d3ee;--c3:#a78bfa;--c4:#4bce97;--g1:rgba(87,157,255,.26);--g2:rgba(167,139,250,.21);--g3:rgba(75,206,151,.16)}}
-:root[data-theme=dark]{--c1:#579dff;--c2:#22d3ee;--c3:#a78bfa;--c4:#4bce97;--g1:rgba(87,157,255,.26);--g2:rgba(167,139,250,.21);--g3:rgba(75,206,151,.16)}
+:root{--c1:#0c66e4;--c2:#0891b2;--c3:#7c3aed;--c4:#1f845a;--g1:rgba(12,102,228,.34);--g2:rgba(139,92,246,.30);--g3:rgba(31,132,90,.24);--g4:rgba(8,145,178,.28);--g5:rgba(244,114,182,.22)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--c1:#579dff;--c2:#22d3ee;--c3:#a78bfa;--c4:#4bce97;--g1:rgba(87,157,255,.38);--g2:rgba(167,139,250,.32);--g3:rgba(75,206,151,.26);--g4:rgba(34,211,238,.26);--g5:rgba(244,114,182,.22)}}
+:root[data-theme=dark]{--c1:#579dff;--c2:#22d3ee;--c3:#a78bfa;--c4:#4bce97;--g1:rgba(87,157,255,.38);--g2:rgba(167,139,250,.32);--g3:rgba(75,206,151,.26);--g4:rgba(34,211,238,.26);--g5:rgba(244,114,182,.22)}
 .steps button:nth-child(1){--sc:var(--c1)}.steps button:nth-child(2){--sc:var(--c2)}.steps button:nth-child(3){--sc:var(--c3)}.steps button:nth-child(4){--sc:var(--c4)}
 .steps b{color:var(--sc)}
 .steps button:hover{border-color:var(--sc)}
@@ -158,6 +173,7 @@ function render(){
   document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{page=b.dataset.p;render()});
   $('#main').className='pg-'+page;
   $('#main').innerHTML=({write:pWrite,copy:pCopy,push:pPush,report:pReport,setup:pSetup})[page]();
+  if($('#main').querySelectorAll('.panel').length>8)$('#main').classList.add('lite');
   bind();
 }
 
@@ -188,8 +204,8 @@ function pWrite(){
         <datalist id="owners">${[...new Set([...TB.members.map(m=>m.fullName||m.username),...S.stories.flatMap(x=>String(x.owner||'').split(',').map(n=>n.trim()))].filter(Boolean))].map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
     </div>
     <label>Trello list <small>optional, e.g. Sprint Backlog. Empty means the default list chosen in Step 2b</small></label>
-    <input id="f-list" list="lists" placeholder="Default list" value="${esc(s.list)}" autocomplete="off">
-    <datalist id="lists">${TB.lists.map(l=>`<option value="${esc(l.name)}">`).join('')}</datalist>
+    <input id="f-list" placeholder="Default list" value="${esc(s.list)}" autocomplete="off">
+    ${TB.lists.length?`<div class="chips"><button class="btn" data-chip="">Default</button>${TB.lists.map(l=>`<button class="btn" data-chip="${esc(l.name)}">${esc(l.name)}</button>`).join('')}</div>`:''}
     <div class="big"><button class="btn p" id="save">${editing!==null?'Save changes':'Add story'}</button>${editing!==null?'<button class="btn" id="cancel">Cancel</button>':''}</div>
   </div>
   <div class="panel">
@@ -454,7 +470,13 @@ function pPush(){
   const connected=TB.boards.length>0, pending=S.stories.filter(s=>!s.cardId).length, unfinished=S.stories.filter(s=>s.cardId&&s.checkDone===false).length;
   const boardName=(TB.boards.find(b=>b.id===T.boardId)||{}).name||'',toMake=T.boardId&&TB.lists.length?S.stories.filter(s=>T.redo||!s.cardId):[];
   const byList=new Map();toMake.forEach(s=>{const d=listFor(s),k=d.make?d.name+' (new)':d.name;byList.set(k,(byList.get(k)||0)+1)});
-  const dests=byList.size?`<br><span class="mute">Goes to: ${[...byList].map(([n,c])=>esc(n)+' ('+c+')').join(', ')}</span>`+toMake.map(s=>({s,d:listFor(s)})).filter(x=>x.d.miss).map(x=>`<br><span class="mute">⚠ ${esc(x.s.id)}: no list called “${esc(x.d.miss)}”, it will go to ${esc(x.d.name)}</span>`).join(''):'';
+  const defList=TB.lists.find(l=>l.id===T.listId)||TB.lists[0]||{name:''};
+  const picker=toMake.length?'<div style="margin:8px 0 14px">'+toMake.map(s=>{
+    const d=listFor(s),bad=d.make||d.miss,cur=bad?String(s.list).trim():(s.list?d.name:'');
+    const opts=[`<option value="" ${cur===''?'selected':''}>Default list (${esc(defList.name)})</option>`,
+      ...TB.lists.map(l=>`<option value="${esc(l.name)}" ${cur===l.name?'selected':''}>${esc(l.name)}</option>`)];
+    if(bad)opts.push(`<option value="${esc(cur)}" selected>${esc(cur)} ${d.make?'(new list)':'(not found, uses default)'}</option>`);
+    return `<div class="item pick"><div class="grow"><b>${esc(s.id)}</b> ${esc(s.title)}</div><select data-pick="${S.stories.indexOf(s)}" ${TB.busy?'disabled':''}>${opts.join('')}</select></div>`}).join('')+'</div>':'';
   const where=byList.size?(byList.size===1?` in ${boardName?boardName+' → ':''}${[...byList.keys()][0]}`:` in ${byList.size} lists`):'';
   return `
   <div class="panel"><h2>1. Connect to Trello <small class="mute">(once)</small></h2>
@@ -478,7 +500,8 @@ function pPush(){
     <label style="font-weight:400"><input type="checkbox" id="t-ml" ${T.makeLists?'checked':''} style="width:auto"> Create lists that a story names but the board doesn't have</label>
     <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label></div>`:''}
   ${connected&&TB.lists.length?`<div class="panel"><h2>4. Push</h2>
-    <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${dests}${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
+    <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
+    ${picker}
     <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s)${where||' in Trello'}`:([pending&&`create ${pending} card(s)${where}`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
     ${TB.result?`<div class="banner ${TB.result.ok?'ok':'err'}">${esc(TB.result.text)}</div>`:''}<pre id="log" style="min-height:40px"></pre>
     <div>${S.stories.filter(s=>s.cardUrl).map(s=>`<div class="mute">✓ ${esc(s.id)}: <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a>${s.cardList?' in '+esc(s.cardList):''}</div>`).join('')}</div>
@@ -605,6 +628,7 @@ function bind(){
   if($('#t-list'))$('#t-list').onchange=e=>{T.listId=e.target.value;saveT()};
   if($('#t-member'))$('#t-member').onchange=e=>{T.memberId=e.target.value;saveT()};
   if($('#t-mk'))$('#t-mk').onchange=e=>{T.makeLabels=e.target.checked;saveT()};
+  document.querySelectorAll('[data-pick]').forEach(s=>s.onchange=()=>{S.stories[+s.dataset.pick].list=s.value;save();render()});
   if($('#t-ml'))$('#t-ml').onchange=e=>{T.makeLists=e.target.checked;saveT();render()};
   if($('#t-redo'))$('#t-redo').onchange=e=>{T.redo=e.target.checked;saveT();render()};
   if($('#go'))$('#go').onclick=pushAll;
@@ -625,6 +649,7 @@ function bind(){
   };
   document.querySelectorAll('[data-exp]').forEach(b=>b.onclick=()=>exportStories(b.dataset.exp));
   if($('#tpl'))$('#tpl').onclick=e=>copy(TEMPLATE_TEXT,e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
+  document.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{const f=$('#f-list');f.value=b.dataset.chip;f.focus()});
   if($('#cancel'))$('#cancel').onclick=()=>{editing=null;render()};
   if($('#save'))$('#save').onclick=()=>{
     const v=k=>$('#f-'+k).value.trim();
@@ -643,6 +668,8 @@ function applyTheme(){const t=theme;
   $('#theme').textContent='Theme: '+t[0].toUpperCase()+t.slice(1)}
 $('#theme').onclick=()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%THEMES.length];try{localStorage.setItem(THEME_KEY,theme)}catch(e){}applyTheme()};
 applyTheme();
+// Stop the background drifting while the window is hidden
+document.addEventListener('visibilitychange',()=>document.documentElement.classList.toggle('idle',document.hidden));
 // Updates (desktop app only): look for a newer signed version on GitHub
 const UPD=window.__TAURI__&&window.__TAURI__.updater;
 let found=null,installing=false;
