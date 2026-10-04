@@ -11,7 +11,8 @@ Trello already has templates and CSV import. What this adds is the course workfl
 On the page that opens, download the file ending in `x64-setup.exe` and run it. No account, Node, Rust or Git needed. (Windows may say "Windows protected your PC" because the installer isn't code-signed: click **More info**, then **Run anyway**.)
 
 <p align="center">
-  <img alt="Writing user stories in Sprint Kit" src="https://raw.githubusercontent.com/Boci0/sprint-kit/main/Sprint_automation/docs/write.png" width="900">
+  <img alt="A short demo: write stories, push them to Trello, move cards, read the report and close the sprint" src="https://raw.githubusercontent.com/Boci0/sprint-kit/main/Sprint_automation/docs/demo.gif" width="900">
+  <br><sub>Sped-up demo with sample data. <a href="https://github.com/Boci0/sprint-kit/blob/main/Sprint_automation/docs/demo.mp4">Watch the full-speed version</a> (100 seconds).</sub>
 </p>
 
 ## What it does
