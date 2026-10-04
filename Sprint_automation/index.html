@@ -74,6 +74,32 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:
 .foot .btn.link{padding:4px 6px}
 #toast{position:fixed;bottom:64px;left:50%;transform:translateX(-50%);z-index:100;max-width:92vw;text-align:center;background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:6px;opacity:0;transition:.2s;pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,.3)}
 #toast.on{opacity:1}
+/* Lively background: soft colour glows that drift slowly behind the panels */
+:root{--g1:rgba(12,102,228,.17);--g2:rgba(139,92,246,.14);--g3:rgba(31,132,90,.11)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--g1:rgba(87,157,255,.20);--g2:rgba(167,139,250,.16);--g3:rgba(75,206,151,.12)}}
+:root[data-theme=dark]{--g1:rgba(87,157,255,.20);--g2:rgba(167,139,250,.16);--g3:rgba(75,206,151,.12)}
+body::before{content:'';position:fixed;inset:-20%;z-index:-1;pointer-events:none;
+  background:radial-gradient(35% 40% at 15% 20%,var(--g1),transparent 70%),radial-gradient(30% 35% at 85% 15%,var(--g2),transparent 70%),radial-gradient(35% 40% at 60% 90%,var(--g3),transparent 70%);
+  animation:drift 28s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translate3d(-2%,-1%,0) scale(1)}to{transform:translate3d(3%,2%,0) scale(1.08)}}
+@media (prefers-reduced-motion:reduce){body::before{animation:none}}
+.panel{box-shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.05)}
+h1{background:linear-gradient(90deg,var(--accent),#8b5cf6);-webkit-background-clip:text;background-clip:text;color:transparent}
+.steps button{transition:border-color .15s,box-shadow .15s}
+.steps button:hover{border-color:var(--accent)}
+.foot{background:color-mix(in srgb,var(--bg) 80%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+#bulk{font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.55}
+a{color:var(--accent)}
+/* Accent touches: each step has its own colour, and the panels carry the colour of the step you are on */
+:root{--c1:#0c66e4;--c2:#0891b2;--c3:#7c3aed;--c4:#1f845a;--g1:rgba(12,102,228,.22);--g2:rgba(139,92,246,.18);--g3:rgba(31,132,90,.14)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--c1:#579dff;--c2:#22d3ee;--c3:#a78bfa;--c4:#4bce97;--g1:rgba(87,157,255,.26);--g2:rgba(167,139,250,.21);--g3:rgba(75,206,151,.16)}}
+:root[data-theme=dark]{--c1:#579dff;--c2:#22d3ee;--c3:#a78bfa;--c4:#4bce97;--g1:rgba(87,157,255,.26);--g2:rgba(167,139,250,.21);--g3:rgba(75,206,151,.16)}
+.steps button:nth-child(1){--sc:var(--c1)}.steps button:nth-child(2){--sc:var(--c2)}.steps button:nth-child(3){--sc:var(--c3)}.steps button:nth-child(4){--sc:var(--c4)}
+.steps b{color:var(--sc)}
+.steps button:hover{border-color:var(--sc)}
+.steps button.on{border-color:var(--sc);box-shadow:inset 0 -3px 0 var(--sc)}
+#main{--pc:var(--c1)}#main.pg-copy{--pc:var(--c2)}#main.pg-push{--pc:var(--c3)}#main.pg-report{--pc:var(--c4)}
+.panel{border-top:3px solid var(--pc)}
 @media(max-width:560px){.two,.three{grid-template-columns:1fr}}
 </style>
 </head>
@@ -175,25 +201,18 @@ function pWrite(){
   <div class="stack">
   <div class="panel">
     <h2>Bulk import from text</h2>
-    <p class="mute" style="margin-top:0">Paste several stories at once, with a blank line between them. Only the title (first line) is required. An AI assistant can fill this in from your notes: copy the template, give it your notes, then paste its answer below.</p>
-    <pre id="tpl-text">Short title of the story
-role: who it is for
-want: what they want to do
-why: the benefit
-points: 3
-pri: Must
-owner: Trello name
-ac: Given ..., when ..., then ...
-ac: add one line for each check
-tasks: one small task
-tasks: add one line for each task</pre>
-    <p class="mute">pri is Must, Should, Could or Won't. You can also write the story as one line: "As a student, I want to search clinics, so that I can book faster".</p>
-    <textarea id="bulk" style="min-height:200px" placeholder="Paste stories here"></textarea>
+    <p class="mute" style="margin-top:0">Paste several stories, with a blank line between them. Only the title (the first line) is required.</p>
+    <textarea id="bulk" style="min-height:290px" placeholder="${esc(TEMPLATE_TEXT).replace(/\n/g,'&#10;')}"></textarea>
     <div class="big"><button class="btn p" id="bulk-go">Import stories</button><button class="btn" id="tpl">Copy template</button></div>
+    <p class="mute" style="margin:10px 0 0">Using an AI assistant? Copy the template, give it your notes, then paste its answer above. The priority (pri) is Must, Should, Could or Won't.</p>
   </div>
   </div>`;
 }
 
+const TEMPLATE_TEXT=[
+  'Short title of the story','role: who it is for','want: what they want to do','why: the benefit',
+  'points: 3','pri: Must','owner: Trello name','ac: Given ..., when ..., then ...','ac: add one line for each check',
+  'tasks: one small task','tasks: add one line for each task'].join('\n');
 const PRI_MAP=[[/^m/i,'Must'],[/^s/i,'Should'],[/^c/i,'Could'],[/^w/i,"Won't"]];
 function parseStories(text){
   let skipped=0;
@@ -425,7 +444,7 @@ function pPush(){
       <li>Open <a href="https://trello.com/power-ups/admin" target="_blank" rel="noopener">trello.com/power-ups/admin</a> → <b>New</b>. Any name, pick your workspace, any https link for the URL. Then open its <b>API key</b> tab, generate a key and copy it.</li>
       <li>On that page click the <b>Token</b> link, <b>Allow</b>, and copy the token.</li>
     </ol>
-    <label>API key</label><input id="t-key" value="${esc(T.key||'')}" autocomplete="off">
+    <label>API key</label><input id="t-key" type="password" value="${esc(T.key||'')}" autocomplete="off">
     <label>Token <small>${secureOK?'saved in Windows Credential Manager':'stays in this browser only, so keep it private'}</small></label><input id="t-token" type="password" value="${esc(T.token||'')}" autocomplete="off">
     <div class="big"><button class="btn p" id="connect">Connect</button><button class="btn link" id="forget">Forget key &amp; token</button></div>
     <p class="mute">${esc(TB.msg)}</p></div>
@@ -583,7 +602,7 @@ function bind(){
     toast(`Imported ${fresh.length} stor${fresh.length===1?'y':'ies'}`+(dupes?`, ${dupes} skipped (title already in your list)`:'')+(skipped?`, ${skipped} line${skipped===1?'':'s'} not understood`:''));
   };
   document.querySelectorAll('[data-exp]').forEach(b=>b.onclick=()=>exportStories(b.dataset.exp));
-  if($('#tpl'))$('#tpl').onclick=e=>copy($('#tpl-text').textContent,e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
+  if($('#tpl'))$('#tpl').onclick=e=>copy(TEMPLATE_TEXT,e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
   if($('#cancel'))$('#cancel').onclick=()=>{editing=null;render()};
   if($('#save'))$('#save').onclick=()=>{
     const v=k=>$('#f-'+k).value.trim();
