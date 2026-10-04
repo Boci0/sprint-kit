@@ -234,7 +234,7 @@ function pWrite(){
       <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('')||'<p class="mute">Nothing yet. Add your first story above.</p>'}
     ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
     ${S.stories.length?`<div class="mute" style="margin-top:10px">Use another tool? Export:
-      <button class="btn link" data-exp="csv">Download CSV</button><button class="btn link" data-exp="md">Download Markdown</button><button class="btn link" data-exp="copycsv">Copy CSV</button><button class="btn link" data-exp="copymd">Copy Markdown</button></div>`:''}
+      <button class="btn link" data-exp="jira">Jira CSV</button><button class="btn link" data-exp="linear">Linear CSV</button><button class="btn link" data-exp="notion">Notion CSV</button><button class="btn link" data-exp="csv">Download CSV</button><button class="btn link" data-exp="md">Download Markdown</button><button class="btn link" data-exp="copycsv">Copy CSV</button><button class="btn link" data-exp="copymd">Copy Markdown</button></div>`:''}
   </div>
   </div>
   <div class="stack">
@@ -279,9 +279,19 @@ function parseStories(text){
 // Export, so the stories can go into any other tool (most tools can import a CSV file)
 const PRI_LABEL={Must:'Must have',Should:'Should have',Could:'Could have',"Won't":"Won't (this time)"};
 const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-function storiesCSV(){
-  const head=['ID','Title','Summary','Description','Priority','Points','Owner','Acceptance criteria','Tasks'];
-  const rows=S.stories.map(s=>[s.id,s.title,cardTitle(s),cardDesc(s),PRI_LABEL[s.pri]||s.pri,s.points,s.owner,lines(s.ac).join('\n'),lines(s.tasks).join('\n')]);
+// Column names the Jira, Linear and Notion importers expect. Description holds the story, criteria and tasks.
+const CSV_FORMATS={
+  generic:{head:['ID','Title','Summary','Description','Priority','Points','Owner','Acceptance criteria','Tasks'],
+    row:s=>[s.id,s.title,cardTitle(s),cardDesc(s),PRI_LABEL[s.pri]||s.pri,s.points,s.owner,lines(s.ac).join('\n'),lines(s.tasks).join('\n')]},
+  jira:{head:['Summary','Issue Type','Priority','Story point estimate','Assignee','Description'],
+    row:s=>[cardTitle(s),'Story',{Must:'Highest',Should:'High',Could:'Medium',"Won't":'Low'}[s.pri]||'Medium',s.points,s.owner,cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'* '+x).join('\n'):'')]},
+  linear:{head:['Title','Description','Priority','Estimate','Assignee'],
+    row:s=>[cardTitle(s),cardDesc(s)+(lines(s.tasks).length?'\n\n'+lines(s.tasks).map(x=>'- [ ] '+x).join('\n'):''),{Must:'Urgent',Should:'High',Could:'Medium',"Won't":'Low'}[s.pri]||'Medium',s.points,s.owner]},
+  notion:{head:['Name','Priority','Points','Owner','Description'],
+    row:s=>[cardTitle(s),PRI_LABEL[s.pri]||s.pri,s.points,s.owner,cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'- '+x).join('\n'):'')]}
+};
+function storiesCSV(fmt='generic'){
+  const f=CSV_FORMATS[fmt]||CSV_FORMATS.generic,head=f.head,rows=S.stories.map(f.row);
   return String.fromCharCode(0xFEFF)+[head,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n');
 }
 function storiesMarkdown(){
@@ -297,6 +307,7 @@ function saveFile(name,text,type){
 function exportStories(kind){
   const day=new Date().toISOString().slice(0,10);
   if(kind==='csv'){saveFile(`stories-${day}.csv`,storiesCSV(),'text/csv;charset=utf-8');toast('CSV saved. Most tools can import it.')}
+  else if(CSV_FORMATS[kind]){saveFile(`stories-${kind}-${day}.csv`,storiesCSV(kind),'text/csv;charset=utf-8');toast(`${kind[0].toUpperCase()+kind.slice(1)} CSV saved. Use that tool's CSV import and match the columns.`)}
   else if(kind==='md'){saveFile(`stories-${day}.md`,storiesMarkdown(),'text/markdown;charset=utf-8');toast('Markdown file saved.')}
   else if(kind==='copycsv')copy(storiesCSV().slice(1),null,'CSV copied. Paste it into a spreadsheet or an import box.');
   else copy(storiesMarkdown(),null,'Markdown copied.');

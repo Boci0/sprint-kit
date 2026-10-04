@@ -1,6 +1,8 @@
 # Sprint Kit for Trello
 
-Write your sprint's user stories once, then get them onto your Trello board as finished cards: description, acceptance criteria, due date, priority label, owner and checklist already filled in. Built for the TMA3084 sprint board, but it works for any Trello board.
+Write your sprint's user stories once, then get them onto your Trello board as finished cards: description, acceptance criteria, due date, priority label, owner and checklist already filled in. It works with any Trello board.
+
+Trello already has templates and CSV import. What this adds is the course workflow in one place: a fixed story format (role, want, why, criteria, tasks), a Review report that reads the board, and a PR sync that moves cards for you. Not on Trello? Export the stories as a CSV laid out for Jira, Linear or Notion.
 
 **[Download the Windows installer](https://github.com/Boci0/sprint-kit/releases/latest)**: open the page, download the file ending in `x64-setup.exe`, and run it. No account, Node, Rust or Git needed. (Windows may say "Windows protected your PC" because the installer isn't code-signed: click **More info**, then **Run anyway**.)
 
@@ -22,3 +24,5 @@ Your Trello key and token are stored in **Windows Credential Manager** in the de
 - [Building the app and publishing a release](https://github.com/Boci0/sprint-kit/blob/main/Sprint_automation/desktop/README.md)
 
 Prefer the browser? Open [`Sprint_automation/index.html`](https://github.com/Boci0/sprint-kit/blob/main/Sprint_automation/index.html) locally: it is the whole app in one file.
+
+Licence: [MIT](https://github.com/Boci0/sprint-kit/blob/main/LICENSE).
