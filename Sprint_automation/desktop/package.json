@@ -1,0 +1,14 @@
+{
+  "name": "sprint-kit-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "sync": "node sync.js",
+    "dev": "npm run sync && tauri dev",
+    "build": "npm run sync && tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

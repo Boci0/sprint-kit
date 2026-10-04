@@ -425,6 +425,11 @@ function bind(){
     editing=null;save();render();toast('Saved');scrollTo(0,0);
   };
 }
+// In the desktop (Tauri) app, open external links in the default browser
+document.addEventListener('click',e=>{
+  const a=e.target.closest('a[href^="http"]');
+  if(a&&window.__TAURI__&&window.__TAURI__.opener){e.preventDefault();window.__TAURI__.opener.openUrl(a.href)}
+});
 $('#goSetup').onclick=()=>{page='setup';render()};
 $('#exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download='sprint-stories.json';a.click()};
 $('#imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.stories)throw 0;S=d;save();page='write';render()}catch(x){alert('Not a valid backup file')}})};
