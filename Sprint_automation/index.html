@@ -80,6 +80,7 @@ function cardDesc(s){
   const ac=lines(s.ac);
   if(ac.length){L.push('**Acceptance criteria**',...ac.map(a=>'- '+a),'')}
   L.push(`**Priority:** ${s.pri}`);
+  if(s.owner)L.push(`**Owner:** ${s.owner}`);
   if(S.review)L.push(`**Due:** sprint Review, ${fmt(S.review)}`);
   return L.join('\n');
 }
@@ -95,7 +96,7 @@ function render(){
 }
 
 function pWrite(){
-  const s=editing!==null?S.stories[editing]:{title:'',role:'',want:'',why:'',ac:'',points:'',pri:'Must',tasks:''};
+  const s=editing!==null?S.stories[editing]:{title:'',role:'',want:'',why:'',ac:'',points:'',pri:'Must',tasks:'',owner:''};
   return `
   <div class="panel">
     <h2>${editing!==null?'Edit '+esc(s.id):'Add a story'}</h2>
@@ -113,13 +114,16 @@ function pWrite(){
       <div><label>Points <small>effort, optional</small></label><input id="f-points" type="number" min="0" value="${esc(s.points)}"></div>
       <div><label>Priority</label><select id="f-pri">${[['Must','Must have'],['Should','Should have'],['Could','Could have'],["Won't","Won't (this time)"]].map(([v,l])=>`<option value="${v}" ${s.pri===v?'selected':''}>${l}</option>`).join('')}</select></div>
     </div>
-    <label>Tasks <small>optional, one per line — if empty, the “done” lines are used as the checklist</small></label>
+    <label>Owner <small>who is accountable; use the name or username they have in Trello (comma-separate for more than one)</small></label>
+    <input id="f-owner" list="owners" value="${esc(s.owner)}" autocomplete="off">
+    <datalist id="owners">${[...new Set([...TB.members.map(m=>m.fullName||m.username),...S.stories.flatMap(x=>String(x.owner||'').split(',').map(n=>n.trim()))].filter(Boolean))].map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
+    <label>Tasks <small>optional,</small> one per line — if empty, the “done” lines are used as the checklist</small></label>
     <textarea id="f-tasks">${esc(s.tasks)}</textarea>
     <div class="big"><button class="btn p" id="save">${editing!==null?'Save changes':'Add story'}</button>${editing!==null?'<button class="btn" id="cancel">Cancel</button>':''}</div>
   </div>
   <div class="panel">
     <h2>Your stories (${S.stories.length})</h2>
-    ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}</div></div>
+    ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}</div></div>
       <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('')||'<p class="mute">Nothing yet. Add your first story above.</p>'}
     ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
   </div>`;
@@ -185,6 +189,15 @@ async function loadBoard(id){
     T.memberId=TB.members.some(m=>m.id===me.id)?me.id:'';saveT()}
   if(!TB.lists.some(l=>l.id===T.listId)){T.listId=(TB.lists.find(l=>/backlog/i.test(l.name))||TB.lists[0]||{}).id;saveT()}
 }
+function memberIds(owner){
+  const ids=[],miss=[];
+  for(const n of String(owner||'').split(',').map(x=>x.trim()).filter(Boolean)){
+    const q=n.toLowerCase().replace(/^@/,''),nm=m=>(m.fullName||'').toLowerCase();
+    const m=TB.members.find(m=>(m.username||'').toLowerCase()===q)||TB.members.find(m=>nm(m)===q)||TB.members.find(m=>nm(m).includes(q));
+    if(m){if(!ids.includes(m.id))ids.push(m.id)}else miss.push(n);
+  }
+  return{ids,miss};
+}
 async function pushAll(){
   const log=$('#log'),say=t=>{log.textContent+=t+'\n';log.scrollTop=log.scrollHeight};
   const todo=S.stories.filter(s=>!s.cardId||T.redo);
@@ -197,7 +210,10 @@ async function pushAll(){
       let lab=TB.labels.find(l=>l.name===lname);
       if(!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
       const p={idList:T.listId,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
-      if(due)p.due=due;if(lab)p.idLabels=lab.id;if(T.memberId)p.idMembers=T.memberId;
+      if(due)p.due=due;if(lab)p.idLabels=lab.id;
+      const {ids,miss}=memberIds(s.owner),who=ids.length?ids:(T.memberId?[T.memberId]:[]);
+      if(who.length)p.idMembers=who.join(',');
+      if(miss.length)say(`⚠ ${s.id}: no board member matches “${miss.join(', ')}”${ids.length?'':' — used the default person'}`);
       const card=await tr('POST','/cards',p);
       s.cardId=card.id;s.cardUrl=card.shortUrl;save();
       const items=cardTasks(s).split('\n').filter(Boolean);
@@ -225,7 +241,7 @@ function pPush(){
   ${connected?`<div class="panel"><h2>2. Choose where the cards go</h2>
     <label>Board</label><select id="t-board"><option value="">— choose —</option>${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
     ${TB.lists.length?`<label>List</label><select id="t-list">${TB.lists.map(l=>`<option value="${l.id}" ${T.listId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>
-    <label>Add this person to every card <small>the accountable member; you can change it per card in Trello</small></label>
+    <label>Default person <small>added to cards whose story has no owner (or an owner that isn't on the board)</small></label>
     <select id="t-member"><option value="">Nobody</option>${TB.members.map(m=>`<option value="${m.id}" ${T.memberId===m.id?'selected':''}>${esc(m.fullName||m.username)}</option>`).join('')}</select>
     <label style="font-weight:400"><input type="checkbox" id="t-mk" ${T.makeLabels?'checked':''} style="width:auto"> Create the Must / Should / Could labels if the board doesn't have them</label>
     <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label>`:''}</div>`:''}
@@ -270,7 +286,7 @@ function bind(){
   if($('#save'))$('#save').onclick=()=>{
     const v=k=>$('#f-'+k).value.trim();
     if(!v('title')){toast('Give the story a title');$('#f-title').focus();return}
-    const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:$('#f-ac').value,points:v('points'),pri:v('pri'),tasks:$('#f-tasks').value};
+    const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:$('#f-ac').value,points:v('points'),pri:v('pri'),tasks:$('#f-tasks').value,owner:v('owner')};
     if(editing!==null)Object.assign(S.stories[editing],d);else S.stories.push({id:nextId(),...d});
     editing=null;save();render();toast('Saved');scrollTo(0,0);
   };
