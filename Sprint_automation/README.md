@@ -34,7 +34,7 @@ You can skip the OAuth / callback URL section on that page. It is not used.
 | **1. Write stories** | Fill in the form, one story at a time, or use **Bulk import from text** to paste several at once. Each story gets an ID like `US-07`. Under your list, **Export** gives you a Markdown file or a CSV (download or copy) for tools other than Trello, with ready-made CSV layouts for Jira, Linear and Notion. |
 | **2a. Copy to Trello** | Copy titles, descriptions and checklists and paste them into Trello yourself. No account connection needed. |
 | **2b. Push to Trello** | Pick a board and list, then create the cards directly. Labels, due dates, owners and checklists are added for you. |
-| **3. Review report** | Reads the board and summarises the sprint: points done, progress by list and owner, carry-over, and problems to fix before the Review. |
+| **3. Review report** | Reads the board and summarises the sprint: points done, progress by list and owner, carry-over, and problems to fix before the Review. The board menu in the report header switches the report to another board (the Push step then uses that board too). |
 
 ### Bulk import format
 

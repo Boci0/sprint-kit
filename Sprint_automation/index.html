@@ -728,7 +728,7 @@ async function closeSprint(){
 function pReport(){
   const head=`<div class="panel wide head"><div><h2>Sprint review report</h2>
     <p class="mute" style="margin:0">Reads your Trello board and summarises the sprint for the Review. Move cards to the Done list first, as the client accepts them.</p></div>
-    <div class="headbtn"><span class="mute">${esc(R.msg)}${R.at&&!R.msg?'Loaded '+R.at.toLocaleTimeString('en-GB'):''}</span>
+    <div class="headbtn">${TB.boards.length?`<select id="rep-board" style="width:auto;min-width:170px" ${R.busy?'disabled':''} title="The board the report reads. The Push step uses the same board.">${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>`:''}<span class="mute">${esc(R.msg)}${R.at&&!R.msg?'Loaded '+R.at.toLocaleTimeString('en-GB'):''}</span>
     <button class="btn p ${R.busy?'busy':''}" id="rep-load" ${R.busy?'disabled':''}>${R.busy?'Loading…':R.cards?'Refresh from Trello':'Load from Trello'}</button></div></div>`;
   if(!R.cards)return head;
   const a=analyse(),pct=a.tp?Math.round(a.dp/a.tp*100):0,md=mdReport(a);
@@ -799,6 +799,13 @@ function bind(){
   document.querySelectorAll('[data-mv]').forEach(s=>s.onchange=()=>moveCards([S.stories[+s.dataset.mv]],s.value));
   if($('#mv-all-go')){$('#mv-all').onchange=e=>{$('#mv-all-go').disabled=!e.target.value||TB.busy};$('#mv-all-go').onclick=()=>{const v=$('#mv-all').value;if(v)moveCards(S.stories.filter(x=>x.cardUrl&&isPushed(x)&&!x.done),v)}}
   if($('#rep-load'))$('#rep-load').onclick=loadReport;
+  // Switching board here is the same as choosing it in the Push step: one current board for the whole app.
+  if($('#rep-board'))$('#rep-board').onchange=async e=>{
+    if(!e.target.value||e.target.value===T.boardId)return;
+    T.boardId=e.target.value;R.cards=null;saveT();
+    await loadReport();
+    reconcilePushed().catch(()=>{});
+  };
   if($('#sc-go'))$('#sc-go').onclick=closeSprint;
   document.querySelectorAll('[data-rl]').forEach(c=>c.onchange=()=>{
     (T.rlBy=T.rlBy||{})[T.boardId]=[...document.querySelectorAll('[data-rl]')].filter(x=>x.checked).map(x=>x.dataset.rl);saveT();render()});
