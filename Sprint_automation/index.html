@@ -162,7 +162,7 @@ function render(){
 }
 
 function pWrite(){
-  const s=editing!==null?S.stories[editing]:{title:'',role:'',want:'',why:'',ac:'',points:'',pri:'Must',tasks:'',owner:''};
+  const s=editing!==null?S.stories[editing]:{title:'',role:'',want:'',why:'',ac:'',points:'',pri:'Must',tasks:'',owner:'',list:''};
   return `
   <div class="stack">
   <div class="panel">
@@ -187,11 +187,14 @@ function pWrite(){
         <input id="f-owner" list="owners" placeholder="Separate several with commas" value="${esc(s.owner)}" autocomplete="off">
         <datalist id="owners">${[...new Set([...TB.members.map(m=>m.fullName||m.username),...S.stories.flatMap(x=>String(x.owner||'').split(',').map(n=>n.trim()))].filter(Boolean))].map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
     </div>
+    <label>Trello list <small>optional, e.g. Sprint Backlog. Empty means the default list chosen in Step 2b</small></label>
+    <input id="f-list" list="lists" placeholder="Default list" value="${esc(s.list)}" autocomplete="off">
+    <datalist id="lists">${TB.lists.map(l=>`<option value="${esc(l.name)}">`).join('')}</datalist>
     <div class="big"><button class="btn p" id="save">${editing!==null?'Save changes':'Add story'}</button>${editing!==null?'<button class="btn" id="cancel">Cancel</button>':''}</div>
   </div>
   <div class="panel">
     <h2>Your stories (${S.stories.length})</h2>
-    ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}</div></div>
+    ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}${x.list?' · → '+esc(x.list):''}</div></div>
       <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('')||'<p class="mute">Nothing yet. Add your first story above.</p>'}
     ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
     ${S.stories.length?`<div class="mute" style="margin-top:10px">Use another tool? Export:
@@ -211,18 +214,18 @@ function pWrite(){
 
 const TEMPLATE_TEXT=[
   'Short title of the story','role: who it is for','want: what they want to do','why: the benefit',
-  'points: 3','pri: Must','owner: Trello name','ac: Given ..., when ..., then ...','ac: add one line for each check',
+  'points: 3','pri: Must','owner: Trello name','list: Trello list (optional)','ac: Given ..., when ..., then ...','ac: add one line for each check',
   'tasks: one small task','tasks: add one line for each task'].join('\n');
 const PRI_MAP=[[/^m/i,'Must'],[/^s/i,'Should'],[/^c/i,'Could'],[/^w/i,"Won't"]];
 function parseStories(text){
   let skipped=0;
   const out=text.split(/\n\s*\n/).map(b=>b.split('\n').map(x=>x.trim()).filter(Boolean)).filter(b=>b.length).map(b=>{
-    const s={title:b[0].replace(/^title\s*:\s*/i,'').replace(/^(?:[-*•]|\d+[.)])\s+/,''),role:'',want:'',why:'',ac:'',points:'',pri:'Should',tasks:'',owner:''};
+    const s={title:b[0].replace(/^title\s*:\s*/i,'').replace(/^(?:[-*•]|\d+[.)])\s+/,''),role:'',want:'',why:'',ac:'',points:'',pri:'Should',tasks:'',owner:'',list:''};
     const ac=[],tk=[];
     b.slice(1).forEach(l=>{
       const sent=l.match(/^as an?\s+(.+?),?\s+i want\s+(.+?),?\s+so that\s+(.+)$/i);
       if(sent){s.role=sent[1];s.want=sent[2];s.why=sent[3];return}
-      const m=l.match(/^(role|want|why|benefit|points|pts|pri|priority|owner|ac|done|tasks?|check)\s*:\s*(.*)$/i);
+      const m=l.match(/^(role|want|why|benefit|points|pts|pri|priority|owner|list|ac|done|tasks?|check)\s*:\s*(.*)$/i);
       if(!m){skipped++;return}
       const k=m[1].toLowerCase(),v=m[2].trim();
       if(k==='ac'||k==='done')ac.push(v);
@@ -355,6 +358,13 @@ function memberIds(owner){
   }
   return{ids,miss};
 }
+// Which Trello list a story goes to: its own "list" (matched by name) or the default list from Step 2b.
+function listFor(s){
+  const def=TB.lists.find(l=>l.id===T.listId)||TB.lists[0],want=String(s.list||'').trim().toLowerCase();
+  if(!want)return{id:def.id,name:def.name};
+  const l=TB.lists.find(l=>l.name.toLowerCase()===want)||TB.lists.find(l=>l.name.toLowerCase().includes(want));
+  return l?{id:l.id,name:l.name}:{id:def.id,name:def.name,miss:s.list};
+}
 // A story is "pushed" only while its card still exists. If the card was archived or deleted in Trello,
 // forget the link so the story can be pushed again.
 async function reconcilePushed(say=()=>{}){
@@ -409,24 +419,26 @@ async function pushAll(){
       let fresh=false;
       if(resume){say(`↺ ${s.id}: finishing its checklist`);finished++}
       else{
-        let card=T.redo?null:onList.get(cardTitle(s));
+        let card=T.redo?null:onList.get(cardTitle(s)),dest=null;
         if(card)say(`↺ ${s.id}: already on Trello, reusing that card`);
         else{
           const [lname,color]=LABEL_FOR[s.pri]||LABEL_FOR.Should;
           let lab=TB.labels.find(l=>l.name===lname);
           if(!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
-          const p={idList:T.listId,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
+          dest=listFor(s);
+          if(dest.miss)say(`⚠ ${s.id}: no list called “${dest.miss}”, so it goes to ${dest.name}`);
+          const p={idList:dest.id,name:cardTitle(s),desc:cardDesc(s),pos:'bottom'};
           if(due)p.due=due;if(lab)p.idLabels=lab.id;
           const {ids,miss}=memberIds(s.owner),who=ids.length?ids:(T.memberId?[T.memberId]:[]);
           if(who.length)p.idMembers=who.join(',');
           if(miss.length)say(`⚠ ${s.id}: no board member matches “${miss.join(', ')}”${ids.length?'':', so the default person was used'}`);
           card=await tr('POST','/cards',p);fresh=true;
         }
-        s.cardId=card.id;s.cardUrl=card.shortUrl;s.clId=undefined;s.checkDone=false;save();created++;
+        s.cardId=card.id;s.cardUrl=card.shortUrl;if(dest)s.cardList=dest.name;s.clId=undefined;s.checkDone=false;save();created++;
       }
       if(items.length)await finishChecklist(s,items,fresh);
       s.checkDone=true;save();
-      say(`✓ ${s.id} ${s.title}`);await sleep(150);
+      say(`✓ ${s.id} ${s.title}`+(s.cardList?` → ${s.cardList}`:''));await sleep(150);
     }
     say(`\nDone: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+'.');
   }catch(e){failed=e.message;say('\n⚠ Stopped: '+e.message+'\nProgress is saved. Click the button again to carry on where it stopped. Nothing will be duplicated.')}
@@ -438,6 +450,10 @@ async function pushAll(){
 function pPush(){
   if(!S.stories.length)return`<div class="panel"><p>Add some stories first.</p><button class="btn p" data-p="write">← Write stories</button></div>`;
   const connected=TB.boards.length>0, pending=S.stories.filter(s=>!s.cardId).length, unfinished=S.stories.filter(s=>s.cardId&&s.checkDone===false).length;
+  const boardName=(TB.boards.find(b=>b.id===T.boardId)||{}).name||'',toMake=T.boardId&&TB.lists.length?S.stories.filter(s=>T.redo||!s.cardId):[];
+  const byList=new Map();toMake.forEach(s=>{const d=listFor(s);byList.set(d.name,(byList.get(d.name)||0)+1)});
+  const dests=byList.size?`<br><span class="mute">Goes to: ${[...byList].map(([n,c])=>esc(n)+' ('+c+')').join(', ')}</span>`+toMake.map(s=>({s,d:listFor(s)})).filter(x=>x.d.miss).map(x=>`<br><span class="mute">⚠ ${esc(x.s.id)}: no list called “${esc(x.d.miss)}”, it will go to ${esc(x.d.name)}</span>`).join(''):'';
+  const where=byList.size?(byList.size===1?` in ${boardName?boardName+' → ':''}${[...byList.keys()][0]}`:` in ${byList.size} lists`):'';
   return `
   <div class="panel"><h2>1. Connect to Trello <small class="mute">(once)</small></h2>
     <ol class="how">
@@ -457,10 +473,10 @@ function pPush(){
     <label style="font-weight:400"><input type="checkbox" id="t-mk" ${T.makeLabels?'checked':''} style="width:auto"> Create the Must / Should / Could labels if the board doesn't have them</label>
     <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label>`:''}</div>`:''}
   ${connected&&TB.lists.length?`<div class="panel"><h2>3. Push</h2>
-    <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
-    <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s) in Trello`:([pending&&`create ${pending} card(s)`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
+    <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${dests}${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
+    <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s)${where||' in Trello'}`:([pending&&`create ${pending} card(s)${where}`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
     ${TB.result?`<div class="banner ${TB.result.ok?'ok':'err'}">${esc(TB.result.text)}</div>`:''}<pre id="log" style="min-height:40px"></pre>
-    <div>${S.stories.filter(s=>s.cardUrl).map(s=>`<div class="mute">✓ ${esc(s.id)}: <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a></div>`).join('')}</div>
+    <div>${S.stories.filter(s=>s.cardUrl).map(s=>`<div class="mute">✓ ${esc(s.id)}: <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a>${s.cardList?' in '+esc(s.cardList):''}</div>`).join('')}</div>
     <p class="mute">Later edits here don't update cards already in Trello; edit those in Trello.</p></div>`:''}`;
 }
 
@@ -607,7 +623,7 @@ function bind(){
   if($('#save'))$('#save').onclick=()=>{
     const v=k=>$('#f-'+k).value.trim();
     if(!v('title')){toast('Give the story a title');$('#f-title').focus();return}
-    const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:$('#f-ac').value,points:v('points'),pri:v('pri'),tasks:$('#f-tasks').value,owner:v('owner')};
+    const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:$('#f-ac').value,points:v('points'),pri:v('pri'),tasks:$('#f-tasks').value,owner:v('owner'),list:v('list')};
     const same=S.stories.find((x,i)=>i!==editing&&x.title.trim().toLowerCase()===d.title.toLowerCase());
     if(same&&!confirm(`A story called “${same.title}” already exists as ${same.id}. Add it again as a new story?`))return;
     if(editing!==null)Object.assign(S.stories[editing],d);else S.stories.push({id:nextId(),...d});
