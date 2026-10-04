@@ -88,10 +88,10 @@ const cardTasks=s=>(lines(s.tasks).length?lines(s.tasks):lines(s.ac)).join('\n')
 
 /* ---------- pages ---------- */
 function render(){
-  $('#steps').innerHTML=[['write','Step 1','Write stories'],['copy','Step 2a','Copy to Trello'],['push','Step 2b','Push to Trello']]
+  $('#steps').innerHTML=[['write','Step 1','Write stories'],['copy','Step 2a','Copy to Trello'],['push','Step 2b','Push to Trello'],['report','Step 3','Review report']]
     .map(([k,a,b])=>`<button data-p="${k}" class="${page===k?'on':''}"><b>${a}</b>${b}</button>`).join('');
   document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{page=b.dataset.p;render()});
-  $('#main').innerHTML=({write:pWrite,copy:pCopy,push:pPush,setup:pSetup})[page]();
+  $('#main').innerHTML=({write:pWrite,copy:pCopy,push:pPush,report:pReport,setup:pSetup})[page]();
   bind();
 }
 
@@ -292,6 +292,90 @@ function pPush(){
     <p class="mute">Later edits here don't update cards already in Trello; edit those in Trello.</p></div>`:''}`;
 }
 
+/* ---------- Review report (reads the live Trello board) ---------- */
+let R={cards:null,board:'',msg:'',at:null};
+async function loadReport(){
+  if(!T.key||!T.token||!T.boardId){R.msg='Connect and choose a board in Step 2b first.';render();return}
+  R.msg='Loading from Trello…';render();
+  try{
+    await loadBoard(T.boardId);
+    R.board=(await tr('GET',`/boards/${T.boardId}`,{fields:'name'})).name;
+    R.cards=await tr('GET',`/boards/${T.boardId}/cards`,{filter:'open',fields:'name,idList,idMembers,due,shortUrl,dateLastActivity',checklists:'all'});
+    R.at=new Date();R.msg='';
+  }catch(e){R.msg='⚠ '+e.message}
+  render();
+}
+function analyse(){
+  const who=Object.fromEntries(TB.members.map(m=>[m.id,m.fullName||m.username]));
+  const ln=Object.fromEntries(TB.lists.map(l=>[l.id,l.name]));
+  const idx=Object.fromEntries(TB.lists.map((l,i)=>[l.id,i]));
+  const defScope=TB.lists.filter(l=>!/product backlog|feedback/i.test(l.name)).map(l=>l.id);
+  const scope=T.rl?T.rl.filter(id=>ln[id]):defScope;
+  const now=Date.now();
+  const all=R.cards.map(c=>{
+    const items=(c.checklists||[]).flatMap(k=>k.checkItems);
+    const pm=c.name.match(/\[(\d+)\]\s*$/);
+    return{...c,list:ln[c.idList]||'?',code:(c.name.match(/^US-\d+/i)||[c.name.slice(0,24)])[0],
+      pts:pm?+pm[1]:0,done:/done/i.test(ln[c.idList]||''),owners:c.idMembers.map(id=>who[id]||'?'),
+      ci:{done:items.filter(i=>i.state==='complete').length,total:items.length},
+      stale:Math.floor((now-new Date(c.dateLastActivity))/864e5)};
+  });
+  const cards=all.filter(c=>scope.includes(c.idList)).sort((a,b)=>idx[a.idList]-idx[b.idList]);
+  const doneC=cards.filter(c=>c.done),open=cards.filter(c=>!c.done);
+  const sum=a=>a.reduce((t,c)=>t+c.pts,0);
+  const byList=TB.lists.filter(l=>scope.includes(l.id)).map(l=>{const cs=cards.filter(c=>c.idList===l.id);return{name:l.name,n:cs.length,pts:sum(cs),max:(l.name.match(/max\s*(\d+)/i)||[])[1]}});
+  const owners={};
+  cards.forEach(c=>(c.owners.length?c.owners:['Unassigned']).forEach(o=>{const r=owners[o]||(owners[o]={n:0,dn:0,p:0,dp:0});r.n++;r.p+=c.pts;if(c.done){r.dn++;r.dp+=c.pts}}));
+  const flags=[];
+  byList.forEach(l=>{if(l.max&&l.n>+l.max)flags.push(`${l.name}: ${l.n} cards, over the limit of ${l.max}`)});
+  open.forEach(c=>{
+    if(!c.owners.length)flags.push(`${c.code} has no owner`);
+    if(/test|qa/i.test(c.list)&&c.ci.total&&c.ci.done<c.ci.total)flags.push(`${c.code} is in ${c.list} but its checklist is ${c.ci.done}/${c.ci.total}`);
+    if(!c.ci.total)flags.push(`${c.code} has no checklist`);
+    if(c.stale>7)flags.push(`${c.code} untouched for ${c.stale} days`);
+  });
+  doneC.forEach(c=>{if(c.ci.total&&c.ci.done<c.ci.total)flags.push(`${c.code} is in Done but its checklist is ${c.ci.done}/${c.ci.total}`)});
+  const dl=TB.lists.find(l=>/done/i.test(l.name)),n=dl&&(dl.name.match(/\d+/)||[])[0];
+  return{n,scope,cards,doneC,open,tp:sum(cards),dp:sum(doneC),byList,owners,flags,feedback:all.filter(c=>/feedback/i.test(c.list))};
+}
+const cardLine=c=>`${c.name}${c.owners.length?' — '+c.owners.join(', '):''}`;
+function mdReport(a){
+  const pct=a.tp?Math.round(a.dp/a.tp*100):0;
+  const L=[`## Sprint ${a.n||''} review — ${R.board}`.replace('  ',' '),`Generated ${R.at.toLocaleString('en-GB')}`,'',
+   `**Result:** ${a.dp} of ${a.tp} points done (${pct}%) · ${a.doneC.length} of ${a.cards.length} cards in Done`,'',
+   '### By list','| List | Cards | Points |','|---|---|---|',...a.byList.map(l=>`| ${l.name} | ${l.n} | ${l.pts} |`),'',
+   '### By owner','| Owner | Cards done / total | Points done / total |','|---|---|---|',...Object.entries(a.owners).map(([o,r])=>`| ${o} | ${r.dn} / ${r.n} | ${r.dp} / ${r.p} |`),'',
+   `### Completed (${a.doneC.length})`,...(a.doneC.map(c=>`- ${cardLine(c)}`)),...(a.doneC.length?[]:['- none']),'',
+   `### Not completed — carry over (${a.open.length})`,...(a.open.map(c=>`- ${cardLine(c)} — ${c.list}${c.ci.total?`, checklist ${c.ci.done}/${c.ci.total}`:''}`)),...(a.open.length?[]:['- none']),''];
+  if(a.feedback.length)L.push(`### Client feedback (${a.feedback.length})`,...a.feedback.map(c=>`- ${c.name}`),'');
+  if(a.flags.length)L.push('### Needs attention',...a.flags.map(f=>`- ${f}`),'');
+  return L.join('\n');
+}
+function pReport(){
+  const head=`<div class="panel"><h2>Sprint review report</h2>
+    <p class="mute" style="margin-top:0">Reads your Trello board and summarises the sprint for the Review. Move cards to the Done list first, as the client accepts them.</p>
+    <div class="big" style="margin:0"><button class="btn p" id="rep-load">${R.cards?'Refresh from Trello':'Load from Trello'}</button></div>
+    <p class="mute">${esc(R.msg)}${R.at&&!R.msg?'Loaded '+R.at.toLocaleTimeString('en-GB'):''}</p></div>`;
+  if(!R.cards)return head;
+  const a=analyse(),pct=a.tp?Math.round(a.dp/a.tp*100):0,md=mdReport(a);
+  const tbl=(h,rows)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</table>`;
+  return head+`
+  <div class="panel"><h2>Result</h2>
+    <p style="font-size:18px;margin:0 0 4px"><b>${a.dp} of ${a.tp} points done (${pct}%)</b></p>
+    <div class="mute">${a.doneC.length} of ${a.cards.length} cards in Done · ${a.open.length} to carry over</div>
+    <details style="margin-top:10px"><summary class="mute" style="cursor:pointer">Which lists count as this sprint?</summary>
+      ${TB.lists.map(l=>`<label style="font-weight:400;margin:6px 0 0"><input type="checkbox" style="width:auto" data-rl="${l.id}" ${a.scope.includes(l.id)?'checked':''}> ${esc(l.name)}</label>`).join('')}</details></div>
+  <div class="panel"><h2>By list</h2>${tbl(['List','Cards','Points'],a.byList.map(l=>[l.name,l.n,l.pts]))}</div>
+  <div class="panel"><h2>By owner</h2>${tbl(['Owner','Cards done / total','Points done / total'],Object.entries(a.owners).map(([o,r])=>[o,`${r.dn} / ${r.n}`,`${r.dp} / ${r.p}`]))}
+    <p class="mute">A card with two owners counts for each of them.</p></div>
+  <div class="panel"><h2>Carry over to the next sprint (${a.open.length})</h2>${a.open.length?tbl(['Card','List','Owner','Checklist'],a.open.map(c=>[c.name,c.list,c.owners.join(', ')||'—',c.ci.total?`${c.ci.done}/${c.ci.total}`:'—'])):'<p class="mute">Nothing — everything is done.</p>'}</div>
+  <div class="panel"><h2>Needs attention (${a.flags.length})</h2>${a.flags.length?'<ul style="margin:0;padding-left:20px">'+a.flags.map(f=>`<li>${esc(f)}</li>`).join('')+'</ul>':'<p class="mute">No problems found.</p>'}</div>
+  ${a.feedback.length?`<div class="panel"><h2>Client feedback (${a.feedback.length})</h2><ul style="margin:0;padding-left:20px">${a.feedback.map(c=>`<li>${esc(c.name)}</li>`).join('')}</ul></div>`:''}
+  <div class="panel"><h2>Copy for your Review card or report</h2>
+    <div class="big" style="margin:0"><button class="btn p" data-copy="${esc(md).replace(/\n/g,'&#10;')}">Copy as text</button><button class="btn" id="rep-dl">Download .md</button></div>
+    <pre>${esc(md)}</pre></div>`;
+}
+
 function pSetup(){
   const lists=['Product Backlog','Sprint Backlog','Doing (max 3)','In Review (max 4)','Testing / QA','Done · Sprint 1','Client Feedback'].join('\n');
   const labels=['Must have','Should have','Could have',"Won't (this time)",'Feature','Bug','Docs / Report','AI feature','Blocked'].join('\n');
@@ -320,6 +404,10 @@ function bind(){
   if($('#t-mk'))$('#t-mk').onchange=e=>{T.makeLabels=e.target.checked;saveT()};
   if($('#t-redo'))$('#t-redo').onchange=e=>{T.redo=e.target.checked;saveT();render()};
   if($('#go'))$('#go').onclick=pushAll;
+  if($('#rep-load'))$('#rep-load').onclick=loadReport;
+  document.querySelectorAll('[data-rl]').forEach(c=>c.onchange=()=>{
+    T.rl=[...document.querySelectorAll('[data-rl]')].filter(x=>x.checked).map(x=>x.dataset.rl);saveT();render()});
+  if($('#rep-dl'))$('#rep-dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([mdReport(analyse())],{type:'text/markdown'}));a.download='sprint-review.md';a.click()};
   if($('#review'))$('#review').onchange=e=>{S.review=e.target.value;save();render()};
   if($('#bulk-go'))$('#bulk-go').onclick=()=>{
     const {stories,skipped}=parseStories($('#bulk').value);
