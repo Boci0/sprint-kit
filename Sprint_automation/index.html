@@ -35,6 +35,13 @@ textarea{resize:vertical;min-height:52px}
 .btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn.link{border:0;background:none;color:var(--accent);padding:2px 6px}
 .btn.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:disabled{opacity:.6;cursor:default}
+.btn.busy::before{content:'';display:inline-block;width:11px;height:11px;margin-right:8px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-1px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.banner{padding:8px 10px;border-radius:6px;margin-top:10px;font-weight:600;border:1px solid}
+.banner.ok{color:var(--ok);border-color:var(--ok)}
+.banner.err{color:#c9372c;border-color:#c9372c}
 .item{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}
 .item:first-child{border-top:0}
 .grow{flex:1;min-width:0}
@@ -72,7 +79,7 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const lines=t=>String(t||'').split('\n').map(x=>x.trim()).filter(Boolean);
-function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),1300)}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),2400)}
 async function copy(t,btn){
   try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}
   toast('Copied — now paste in Trello');if(btn){btn.classList.add('done');btn.textContent='Copied ✓'}
@@ -290,15 +297,17 @@ async function pushAll(){
   const log=$('#log'),say=t=>{log.textContent+=t+'\n';log.scrollTop=log.scrollHeight};
   const todo=S.stories.filter(s=>!s.cardId||s.checkDone===false||T.redo);
   if(!todo.length){say('Nothing to push — all stories are already on Trello.');return}
-  TB.busy=true;$('#go').disabled=true;log.textContent='';
+  TB.busy=true;TB.result=null;const go=$('#go');go.disabled=true;go.classList.add('busy');go.textContent='Starting…';log.textContent='';
   const due=S.review?new Date(S.review+'T17:00:00').toISOString():undefined;
-  let created=0,finished=0;
+  let created=0,finished=0,failed=null;
   try{
     // If an earlier push died after Trello made a card but before we heard back, reuse it instead of duplicating it.
     const onList=new Map();
+    // Looks at the whole board (not just the target list), so a card that has since moved is still recognised.
     if(!T.redo&&todo.some(s=>!s.cardId))
-      (await tr('GET',`/lists/${T.listId}/cards`,{fields:'name,shortUrl'})).forEach(c=>onList.set(c.name,c));
-    for(const s of todo){
+      (await tr('GET',`/boards/${T.boardId}/cards`,{filter:'open',fields:'name,shortUrl'})).forEach(c=>onList.set(c.name,c));
+    for(const [i,s] of todo.entries()){
+      go.textContent=`Pushing ${i+1} of ${todo.length}…`;
       const items=cardTasks(s).split('\n').filter(Boolean);
       const resume=s.cardId&&s.checkDone===false&&!T.redo;
       let fresh=false;
@@ -324,8 +333,11 @@ async function pushAll(){
       say(`✓ ${s.id} ${s.title}`);await sleep(150);
     }
     say(`\nDone — ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+'.');
-  }catch(e){say('\n⚠ Stopped: '+e.message+'\nProgress is saved. Click the button again to carry on where it stopped — nothing will be duplicated.')}
-  TB.busy=false;const keep=log.textContent;render();if($('#log'))$('#log').textContent=keep;
+  }catch(e){failed=e.message;say('\n⚠ Stopped: '+e.message+'\nProgress is saved. Click the button again to carry on where it stopped — nothing will be duplicated.')}
+  TB.busy=false;
+  TB.result=failed?{ok:false,text:'Stopped: '+failed+' Progress is saved; click the button again to carry on.'}
+    :{ok:true,text:`Done: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+'.'};
+  const keep=log.textContent;render();if($('#log'))$('#log').textContent=keep;
 }
 function pPush(){
   if(!S.stories.length)return`<div class="panel"><p>Add some stories first.</p><button class="btn p" data-p="write">← Write stories</button></div>`;
@@ -342,6 +354,7 @@ function pPush(){
     <p class="mute">${esc(TB.msg)}</p></div>
   ${connected?`<div class="panel"><h2>2. Choose where the cards go</h2>
     <label>Board</label><select id="t-board"><option value="">— choose —</option>${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
+    ${T.boardId?`<div class="mute" style="margin-top:4px">Board ID: <code>${esc(T.boardId)}</code> <button class="btn link" data-copy="${esc(T.boardId)}">Copy</button> for the GitHub secret TRELLO_BOARD_ID</div>`:''}
     ${TB.lists.length?`<label>List</label><select id="t-list">${TB.lists.map(l=>`<option value="${l.id}" ${T.listId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>
     <label>Default person <small>added to cards whose story has no owner (or an owner that isn't on the board)</small></label>
     <select id="t-member"><option value="">Nobody</option>${TB.members.map(m=>`<option value="${m.id}" ${T.memberId===m.id?'selected':''}>${esc(m.fullName||m.username)}</option>`).join('')}</select>
@@ -350,7 +363,7 @@ function pPush(){
   ${connected&&TB.lists.length?`<div class="panel"><h2>3. Push</h2>
     <p>${pending} of ${S.stories.length} stories not on Trello yet. Each becomes a card with its description, due date, priority label and checklist.${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
     <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s) in Trello`:([pending&&`create ${pending} card(s)`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
-    <pre id="log" style="min-height:40px"></pre>
+    ${TB.result?`<div class="banner ${TB.result.ok?'ok':'err'}">${esc(TB.result.text)}</div>`:''}<pre id="log" style="min-height:40px"></pre>
     <div>${S.stories.filter(s=>s.cardUrl).map(s=>`<div class="mute">✓ ${esc(s.id)} — <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a></div>`).join('')}</div>
     <p class="mute">Later edits here don't update cards already in Trello; edit those in Trello.</p></div>`:''}`;
 }
@@ -359,13 +372,14 @@ function pPush(){
 let R={cards:null,board:'',msg:'',at:null};
 async function loadReport(){
   if(!T.key||!T.token||!T.boardId){R.msg='Connect and choose a board in Step 2b first.';render();return}
-  R.msg='Loading from Trello…';render();
+  R.msg='Loading from Trello…';R.busy=true;render();
   try{
     await loadBoard(T.boardId);
     R.board=(await tr('GET',`/boards/${T.boardId}`,{fields:'name'})).name;
     R.cards=await tr('GET',`/boards/${T.boardId}/cards`,{filter:'open',fields:'name,idList,idMembers,due,shortUrl,dateLastActivity',checklists:'all'});
     R.at=new Date();R.msg='';
   }catch(e){R.msg='⚠ '+e.message}
+  R.busy=false;
   render();
 }
 function analyse(){
@@ -417,7 +431,7 @@ function mdReport(a){
 function pReport(){
   const head=`<div class="panel"><h2>Sprint review report</h2>
     <p class="mute" style="margin-top:0">Reads your Trello board and summarises the sprint for the Review. Move cards to the Done list first, as the client accepts them.</p>
-    <div class="big" style="margin:0"><button class="btn p" id="rep-load">${R.cards?'Refresh from Trello':'Load from Trello'}</button></div>
+    <div class="big" style="margin:0"><button class="btn p ${R.busy?'busy':''}" id="rep-load" ${R.busy?'disabled':''}>${R.busy?'Loading…':R.cards?'Refresh from Trello':'Load from Trello'}</button></div>
     <p class="mute">${esc(R.msg)}${R.at&&!R.msg?'Loaded '+R.at.toLocaleTimeString('en-GB'):''}</p></div>`;
   if(!R.cards)return head;
   const a=analyse(),pct=a.tp?Math.round(a.dp/a.tp*100):0,md=mdReport(a);
@@ -459,7 +473,7 @@ function bind(){
   document.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>copy(cardTasks(S.stories[+b.dataset.ct]),b));
   document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=+b.dataset.edit;render();scrollTo(0,0)});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this story?')){S.stories.splice(+b.dataset.del,1);editing=null;save();render()}});
-  if($('#connect'))$('#connect').onclick=async()=>{T.key=$('#t-key').value.trim();T.token=$('#t-token').value.trim();if(!T.key||!T.token){TB.msg='Enter both the key and the token.';render();return}await persistSecrets();saveT();loadBoards()};
+  if($('#connect'))$('#connect').onclick=async()=>{T.key=$('#t-key').value.trim();T.token=$('#t-token').value.trim();if(!T.key||!T.token){TB.msg='Enter both the key and the token.';render();return}const cb=$('#connect');cb.classList.add('busy');cb.disabled=true;cb.textContent='Connecting…';await persistSecrets();saveT();loadBoards()};
   if($('#forget'))$('#forget').onclick=async()=>{T={};await persistSecrets();saveT();TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};render()};
   if($('#t-board'))$('#t-board').onchange=async e=>{if(!e.target.value)return;try{await loadBoard(e.target.value)}catch(x){TB.msg='⚠ '+x.message}render()};
   if($('#t-list'))$('#t-list').onchange=e=>{T.listId=e.target.value;saveT()};
@@ -475,17 +489,22 @@ function bind(){
   if($('#bulk-go'))$('#bulk-go').onclick=()=>{
     const {stories,skipped}=parseStories($('#bulk').value);
     if(!stories.length){toast('Paste some stories first');return}
-    stories.forEach(s=>S.stories.push({id:nextId(),...s}));
+    const have=new Set(S.stories.map(x=>x.title.trim().toLowerCase()));
+    const fresh=stories.filter(s=>!have.has(s.title.trim().toLowerCase()));
+    const dupes=stories.length-fresh.length;
+    fresh.forEach(s=>{S.stories.push({id:nextId(),...s})});
     save();render();
-    toast(`Imported ${stories.length} stor${stories.length===1?'y':'ies'}`+(skipped?` (${skipped} line${skipped===1?'':'s'} not understood)`:''));
+    toast(`Imported ${fresh.length} stor${fresh.length===1?'y':'ies'}`+(dupes?`, ${dupes} skipped (title already in your list)`:'')+(skipped?`, ${skipped} line${skipped===1?'':'s'} not understood`:''));
   };
   if($('#cancel'))$('#cancel').onclick=()=>{editing=null;render()};
   if($('#save'))$('#save').onclick=()=>{
     const v=k=>$('#f-'+k).value.trim();
     if(!v('title')){toast('Give the story a title');$('#f-title').focus();return}
     const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:$('#f-ac').value,points:v('points'),pri:v('pri'),tasks:$('#f-tasks').value,owner:v('owner')};
+    const same=S.stories.find((x,i)=>i!==editing&&x.title.trim().toLowerCase()===d.title.toLowerCase());
+    if(same&&!confirm(`A story called “${same.title}” already exists as ${same.id}. Add it again as a new story?`))return;
     if(editing!==null)Object.assign(S.stories[editing],d);else S.stories.push({id:nextId(),...d});
-    editing=null;save();render();toast('Saved');scrollTo(0,0);
+    editing=null;save();render();toast(`Saved “${d.title}”`);scrollTo(0,0);
   };
 }
 const THEME_KEY='sprintkit.theme',THEMES=['auto','light','dark'];

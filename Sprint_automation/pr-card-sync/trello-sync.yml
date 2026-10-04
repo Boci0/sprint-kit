@@ -1,0 +1,33 @@
+# Copy this file to  .github/workflows/trello-sync.yml  in your TEAM'S CODE repository,
+# and trello-sync.mjs to  .github/trello-sync/trello-sync.mjs  (see README.md).
+name: Trello card sync
+
+on:
+  create:                      # a branch such as feature/US-07-login is created
+  pull_request:
+    types: [opened, reopened, ready_for_review, closed]
+  workflow_run:                # comment the CI result on the card
+    workflows: ["CI"]          # must match the `name:` of your CI workflow
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    # ignore tags; only branches matter
+    if: github.event_name != 'create' || github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync Trello card
+        run: node .github/trello-sync/trello-sync.mjs
+        env:
+          TRELLO_KEY: ${{ secrets.TRELLO_KEY }}
+          TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
+          TRELLO_BOARD_ID: ${{ secrets.TRELLO_BOARD_ID }}
+          # Optional:
+          # MERGE_BASE: develop        # only move to Testing when merged into this branch
+          # DRY_RUN: "1"               # log what would happen without changing Trello
+          # LIST_REVIEW: "pull request" # regex if your list names differ (LIST_DOING, LIST_TESTING, ...)
