@@ -3503,7 +3503,7 @@ dependencies = [
 
 [[package]]
 name = "sprint-kit"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "keyring",
  "serde_json",
