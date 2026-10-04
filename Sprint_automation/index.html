@@ -133,10 +133,8 @@ a{color:var(--accent)}
   <div id="main"></div>
   <div class="foot">
     <button class="btn link" id="goSetup">First time? Set up the Trello board</button>
-    <button class="btn link" id="exp">Save backup</button>
     <button class="btn link" id="chk" hidden>Check for updates</button>
     <span class="mute" id="ver" style="align-self:center"></span>
-    <label class="btn link" style="margin:0;cursor:pointer">Load backup<input type="file" id="imp" accept=".json" hidden></label>
   </div>
 </div>
 <div id="toast"></div>
@@ -233,6 +231,7 @@ function pWrite(){
     ${S.stories.map((x,i)=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}${x.list?' · → '+esc(x.list):''}</div></div>
       <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('')||'<p class="mute">Nothing yet. Add your first story above.</p>'}
     ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
+    <div class="mute" style="margin-top:10px"><button class="btn link" id="exp">Save stories to a file</button><label class="btn link" style="margin:0;cursor:pointer">Load stories from a file<input type="file" id="imp" accept=".json" hidden></label><br>A copy of your stories only, not your Trello settings. Load it to restore them or move to another computer.</div>
     ${S.stories.length?`<div class="mute" style="margin-top:10px">Use another tool? Export as <select id="exp-fmt" style="width:auto;display:inline-block">${EXP_FORMATS.map(([k,l])=>`<option value="${k}" ${expFmt===k?'selected':''}>${l}</option>`).join('')}</select> <button class="btn link" id="exp-dl">Download</button><button class="btn link" id="exp-copy">Copy</button></div>`:''}
   </div>
   </div>
@@ -299,9 +298,22 @@ function storiesMarkdown(){
     return `## ${cardTitle(s)}\n\n${cardDesc(s)}`+(t.length?'\n\n**Tasks**\n'+t.map(x=>'- '+x).join('\n'):'');
   }).join('\n\n');
 }
-function saveFile(name,text,type){
+// The desktop app has no browser-style downloads, so there it opens a Save As window and writes the file itself.
+async function saveFile(name,text,type,okMsg){
+  const T=window.__TAURI__;
+  if(T&&T.dialog&&T.fs){
+    try{
+      const ext=name.split('.').pop();
+      const path=await T.dialog.save({defaultPath:name,filters:[{name:ext.toUpperCase()+' file',extensions:[ext]}]});
+      if(!path)return;
+      await T.fs.writeTextFile(path,text);
+      toast(okMsg);
+    }catch(x){toast('Could not save the file: '+(x&&x.message||x))}
+    return;
+  }
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  toast(okMsg);
 }
 const EXP_FORMATS=[['csv','Generic CSV'],['jira','Jira CSV'],['linear','Linear CSV'],['notion','Notion CSV'],['md','Markdown']];
 let expFmt='csv';
@@ -309,9 +321,9 @@ function exportStories(kind,copyIt){
   const day=new Date().toISOString().slice(0,10),label=(EXP_FORMATS.find(f=>f[0]===kind)||[])[1]||'Export';
   if(kind==='md'){
     if(copyIt)copy(storiesMarkdown(),null,'Markdown copied.');
-    else{saveFile(`stories-${day}.md`,storiesMarkdown(),'text/markdown;charset=utf-8');toast('Markdown file saved.')}
+    else saveFile(`stories-${day}.md`,storiesMarkdown(),'text/markdown;charset=utf-8','Markdown file saved.');
   }else if(copyIt)copy(storiesCSV(kind).slice(1),null,`${label} copied. Paste it into a spreadsheet or an import box.`);
-  else{saveFile(`stories-${kind==='csv'?'':kind+'-'}${day}.csv`,storiesCSV(kind),'text/csv;charset=utf-8');toast(`${label} saved.`+(kind==='csv'?' Most tools can import it.':" Use that tool's CSV import and match the columns."))}
+  else saveFile(`stories-${kind==='csv'?'':kind+'-'}${day}.csv`,storiesCSV(kind),'text/csv;charset=utf-8',`${label} saved.`+(kind==='csv'?' Most tools can import it.':" Use that tool's CSV import and match the columns."));
 }
 
 function pCopy(){
@@ -669,7 +681,7 @@ function bind(){
   if($('#rep-load'))$('#rep-load').onclick=loadReport;
   document.querySelectorAll('[data-rl]').forEach(c=>c.onchange=()=>{
     T.rl=[...document.querySelectorAll('[data-rl]')].filter(x=>x.checked).map(x=>x.dataset.rl);saveT();render()});
-  if($('#rep-dl'))$('#rep-dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([mdReport(analyse())],{type:'text/markdown'}));a.download='sprint-review.md';a.click()};
+  if($('#rep-dl'))$('#rep-dl').onclick=()=>saveFile('sprint-review.md',mdReport(analyse()),'text/markdown;charset=utf-8','Report saved.');
   if($('#review'))$('#review').onchange=e=>{S.review=e.target.value;save();render()};
   if($('#bulk-go'))$('#bulk-go').onclick=()=>{
     const {stories,skipped}=parseStories($('#bulk').value);
@@ -681,6 +693,7 @@ function bind(){
     save();render();
     toast(`Imported ${fresh.length} stor${fresh.length===1?'y':'ies'}`+(dupes?`, ${dupes} skipped (title already in your list)`:'')+(skipped?`, ${skipped} line${skipped===1?'':'s'} not understood`:''));
   };
+  if($('#exp')){$('#exp').onclick=()=>saveFile('sprint-stories.json',JSON.stringify(S,null,2),'application/json','Stories saved.');$('#imp').onchange=importStories}
   if($('#exp-fmt')){$('#exp-fmt').onchange=e=>{expFmt=e.target.value};$('#exp-dl').onclick=()=>exportStories(expFmt,false);$('#exp-copy').onclick=()=>exportStories(expFmt,true)}
   if($('#tpl'))$('#tpl').onclick=e=>copy(TEMPLATE_TEXT,e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
   document.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{const f=$('#f-list');f.value=b.dataset.chip;f.focus()});
@@ -744,8 +757,7 @@ document.addEventListener('click',e=>{
   if(a&&window.__TAURI__&&window.__TAURI__.opener){e.preventDefault();window.__TAURI__.opener.openUrl(a.href)}
 });
 $('#goSetup').onclick=()=>{page='setup';render()};
-$('#exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download='sprint-stories.json';a.click()};
-$('#imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.stories)throw 0;S=d;save();page='write';render()}catch(x){ask('Not a valid backup file','Choose a file you saved with Save backup.',{ok:'OK',cancel:''})}})};
+const importStories=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.stories)throw 0;S=d;save();page='write';render()}catch(x){ask('Not a valid backup file','Choose a file you saved with Save stories to a file.',{ok:'OK',cancel:''})}})};
 render();
 </script>
 </body>

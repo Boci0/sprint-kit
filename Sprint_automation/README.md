@@ -74,7 +74,7 @@ tasks: add one line for each task
 
 ## Backups
 
-**Save backup** and **Load backup** (bottom of the page) export and import your stories as a JSON file. Do this before moving to another computer or reinstalling.
+**Save stories to a file** and **Load stories from a file** (under "Your stories" on the first step) save and restore your stories as a JSON file. It does not include your Trello settings. Do this before moving to another computer or reinstalling.
 
 ## For developers
 
