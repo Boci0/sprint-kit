@@ -1,7 +1,7 @@
 // Run with:  node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractIds, stageOf, plan, run } from './trello-sync.mjs';
+import { extractIds, extractCodes, prefixesFromEnv, stageOf, plan, run } from './trello-sync.mjs';
 
 const LISTS = [
   { id: 'pb', name: 'Product Backlog' },
@@ -252,4 +252,63 @@ test('the log shows how each list was understood', async () => {
   await run({ env: ENV, eventName: 'pull_request', event: pr('opened'), fetchImpl: b.fetchImpl, log: (x) => seen.push(x) });
   const line = seen.find((l) => l.startsWith('Board lists:'));
   assert.match(line, /Doing \(max 3\) \(doing\)/); assert.match(line, /Client Feedback \(ignored\)/);
+});
+
+// ---- custom ID prefixes (CARD_PREFIX) ----
+test('CARD_PREFIX defaults to US, accepts a list, and rejects nonsense', () => {
+  assert.deepEqual(prefixesFromEnv({}), ['US']);
+  assert.deepEqual(prefixesFromEnv({ CARD_PREFIX: ' fr , us ' }), ['FR', 'US']);
+  assert.deepEqual(prefixesFromEnv({ CARD_PREFIX: 'FR-AI' }), ['FR-AI']);
+  assert.throws(() => prefixesFromEnv({ CARD_PREFIX: 'FR 1' }), /not a valid prefix/);
+  assert.throws(() => prefixesFromEnv({ CARD_PREFIX: '7UP' }), /not a valid prefix/);
+});
+
+test('IDs with your own prefixes are read, with FR-AI told apart from FR', () => {
+  const P = ['FR', 'FR-AI', 'US'];
+  assert.deepEqual(extractCodes(P, 'feature/FR-03-login', 'FR-AI-01: chat'), ['FR-3', 'FR-AI-1']);
+  assert.deepEqual(extractCodes(['FR'], 'US-07 and fr-003'), ['FR-3']);
+  assert.deepEqual(extractCodes(['FR'], 'SOFR-03', 'FR-ABC'), []);
+});
+
+test('a card with a custom prefix is found and moved; the default US cards are not touched', async () => {
+  const cards = [
+    { id: 'c3', idList: 'sb', name: 'FR-03 · Login [3]' },
+    { id: 'c7', idList: 'sb', name: 'US-07 · Old card [3]' },
+  ];
+  const writes = [];
+  const ok = (d) => ({ ok: true, status: 200, json: async () => d, text: async () => '' });
+  const fetchImpl = async (url, o = {}) => {
+    const path = new URL(url).pathname.replace('/1', ''), m = o.method || 'GET';
+    if (m === 'GET' && path === '/boards/B/lists') return ok(LISTS);
+    if (m === 'GET' && path === '/boards/B/cards') return ok(cards);
+    if (m === 'GET') return ok([]);
+    writes.push([m, path, o.body ? JSON.parse(o.body) : {}]);
+    return ok({});
+  };
+  const ev = { ref_type: 'branch', ref: 'feature/FR-03-login' };
+  const r = await run({ env: { ...ENV, CARD_PREFIX: 'FR' }, eventName: 'create', event: ev, fetchImpl, log });
+  assert.equal(r.actions[0].id, 'FR-03');
+  assert.deepEqual(writes.filter((w) => w[0] === 'PUT').map((w) => [w[1], w[2].idList]), [['/cards/c3', 'dg']]);
+
+  // With the default prefix the same branch has no card ID, so nothing happens.
+  writes.length = 0;
+  const r2 = await run({ env: ENV, eventName: 'create', event: ev, fetchImpl, log });
+  assert.equal(r2.skipped, 'no-id'); assert.equal(writes.length, 0);
+});
+
+test('several prefixes work together, so old US cards still sync after a change to FR', async () => {
+  const cards = [{ id: 'c7', idList: 'sb', name: 'US-07 · Old card [3]' }, { id: 'c3', idList: 'sb', name: 'FR-03 · New card [3]' }];
+  const moved = [];
+  const ok = (d) => ({ ok: true, status: 200, json: async () => d, text: async () => '' });
+  const fetchImpl = async (url, o = {}) => {
+    const path = new URL(url).pathname.replace('/1', ''), m = o.method || 'GET';
+    if (m === 'GET' && path === '/boards/B/lists') return ok(LISTS);
+    if (m === 'GET' && path === '/boards/B/cards') return ok(cards);
+    if (m === 'GET') return ok([]);
+    if (m === 'PUT') moved.push(path);
+    return ok({});
+  };
+  await run({ env: { ...ENV, CARD_PREFIX: 'FR,US' }, eventName: 'create', event: { ref_type: 'branch', ref: 'feature/US-07-x' }, fetchImpl, log });
+  await run({ env: { ...ENV, CARD_PREFIX: 'FR,US' }, eventName: 'create', event: { ref_type: 'branch', ref: 'feature/FR-03-x' }, fetchImpl, log });
+  assert.deepEqual(moved, ['/cards/c7', '/cards/c3']);
 });

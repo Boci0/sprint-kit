@@ -10,7 +10,9 @@ Keeps your Trello board in step with GitHub, so nobody has to drag cards by hand
 | The pull request is closed without merging | Moves from In Review back to **Doing** |
 | The CI workflow finishes | A comment says whether it passed or failed |
 
-The card is found from the ID (`US-07`) in the **branch name or the PR title**, which matches the card titles the Sprint Kit app creates (`US-07 · Title [5]`).
+The card is found from the ID (`US-07`) in the **branch name or the PR title**, which matches the card titles the Sprint Kit app creates (`US-07 · Title [5]`). Capitals and leading zeros don't matter: `fr-3` finds `FR-03`.
+
+**Using your own ID prefix?** In Sprint Kit, set the prefix in **Settings → Stories** (for example `FR`). Then add a `CARD_PREFIX` line to the workflow's `env:` with the same value. If your board has cards with more than one prefix, list them all: `CARD_PREFIX: FR,US`. Sprint Kit shows the exact value to copy. Without it the job only looks for `US-`.
 
 **What it will not do**
 - Move a card backwards (apart from "closed without merging"), or touch cards in **Done** or in lists it doesn't recognise, such as Client Feedback.
@@ -64,4 +66,4 @@ From this folder:
 
     node --test
 
-21 tests cover ID detection, every move rule, draft PRs, duplicates, missing secrets, dry runs and Trello errors, using a fake Trello board. They do not call the real Trello API.
+27 tests cover ID detection (including custom prefixes), every move rule, draft PRs, duplicates, missing secrets, dry runs and Trello errors, using a fake Trello board. They do not call the real Trello API.

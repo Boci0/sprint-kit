@@ -10,7 +10,7 @@
 :root[data-theme=dark]{--bg:#1d2125;--card:#22272b;--ink:#dee4ea;--mute:#9fadbc;--line:#38414a;--accent:#579dff;--ok:#4bce97}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,sans-serif}
-@media(min-width:900px){#main.pg-write{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}#main.pg-setup{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:900px){#main.pg-write{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}}
 @media(min-width:1100px){#main.pg-push{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .wrap{max-width:1680px;margin:0 auto;padding:12px 16px 0;min-height:100vh;display:flex;flex-direction:column}
 #main{margin-bottom:14px}
@@ -121,18 +121,49 @@ a{color:var(--accent)}
 .steps button.on{border-color:var(--sc);box-shadow:inset 0 -3px 0 var(--sc)}
 #main{--pc:var(--c1)}#main.pg-copy{--pc:var(--c2)}#main.pg-push{--pc:var(--c3)}#main.pg-report{--pc:var(--c4)}
 .panel{border-top:3px solid var(--pc)}
-@media(max-width:560px){.two,.three{grid-template-columns:1fr}}
+.cols{display:grid;grid-template-columns:repeat(var(--n,1),minmax(0,1fr));gap:10px;align-items:end}
+@media(max-width:560px){.two,.three,.cols{grid-template-columns:1fr}}
+.top .acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+#settingsBtn{padding:5px 11px}
+#settingsBtn.on{border-color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent)}
+#main.pg-settings{--pc:var(--c3)}
+.tabbar{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:-4px 0 12px;overflow-x:auto}
+.tabbar button{border:0;border-bottom:3px solid transparent;background:none;color:var(--mute);font:inherit;font-weight:600;padding:8px 12px;cursor:pointer;white-space:nowrap}
+.tabbar button:hover{color:var(--ink)}
+.tabbar button.on{color:var(--ink);border-bottom-color:var(--pc)}
+.set-layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:16px;align-items:start}
+.set-nav{display:flex;flex-direction:column;gap:6px;position:sticky;top:8px}
+.set-nav button{display:block;width:100%;text-align:left;padding:8px 12px;border:1px solid var(--line);background:var(--card);color:var(--mute);border-radius:8px;cursor:pointer;font:inherit;transition:border-color .15s,box-shadow .15s}
+.set-nav button b{display:block;color:var(--ink);font-size:14px}
+.set-nav button span{display:block;font-size:12px}
+.set-nav button:hover{border-color:var(--pc)}
+.set-nav button.on{border-color:var(--pc);box-shadow:inset 3px 0 0 var(--pc)}
+.set-body{display:grid;gap:12px;max-width:880px;min-width:0}
+.copy-layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px;align-items:start}
+.sticky{position:sticky;top:8px}
+#story-list{max-height:min(58vh,520px);overflow:auto;padding-right:4px}
+#log:empty{display:none}
+.tblwrap{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.tblwrap table th{position:sticky;top:0;background:var(--card);z-index:1}
+td.act{white-space:nowrap;text-align:right}
+td.act .btn{padding:3px 9px;font-size:12px}
+tr[data-sel]{cursor:pointer}
+tr[data-sel]:hover td{background:color-mix(in srgb,var(--pc) 7%,transparent)}
+tr.sel td{background:color-mix(in srgb,var(--pc) 14%,transparent)}
+.tblwrap td select{width:100%;min-width:170px}
+@media(max-width:900px){.copy-layout{grid-template-columns:minmax(0,1fr)}.sticky{position:static}}
+@media(max-width:820px){.set-layout{grid-template-columns:minmax(0,1fr)}.set-nav{flex-direction:row;overflow-x:auto;position:static;padding-bottom:4px}.set-nav button{width:auto;white-space:nowrap}.set-nav button span{display:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><h1>Sprint Kit for Trello</h1><button class="btn" id="theme" title="Switch between automatic, light and dark"></button></div>
+  <div class="top"><h1>Sprint Kit for Trello</h1><div class="acts"><button class="btn" id="settingsBtn" title="Settings: IDs, priorities, card format, report rules and more">⚙ Settings</button><button class="btn" id="theme" title="Switch between automatic, light and dark"></button></div></div>
   <p class="sub">Write your user stories here, then copy them into Trello.</p>
   <div class="banner ok" id="upd" hidden style="margin:0 0 12px"></div>
   <div class="steps" id="steps"></div>
   <div id="main"></div>
   <div class="foot">
-    <button class="btn link" id="goSetup">First time? Set up the Trello board</button>
+    <button class="btn link" id="goSetup">First time? Set up a Trello board</button>
     <button class="btn link" id="chk" hidden>Check for updates</button>
     <span class="mute" id="ver" style="align-self:center"></span>
   </div>
@@ -176,22 +207,217 @@ async function copy(t,btn,msg){
   try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}
   toast(msg||'Copied. Now paste it in Trello');if(btn){btn.classList.add('done');btn.textContent='Copied ✓'}
 }
-const nextId=()=>'US-'+String((S.stories.reduce((m,s)=>Math.max(m,+s.id.replace(/\D/g,'')||0),0))+1).padStart(2,'0');
-const fmt=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';
+/* Story IDs. The prefix and the number of digits are settings, so a team can use FR-03, REQ-003 and so on.
+   Stories that already exist keep their IDs: the ID is in the card's title on Trello and the PR sync looks cards up by it. */
+const ID_DEFAULTS={idPrefix:'US',idPad:2};
+const DEFAULT_TITLE='{id} · {title} {points}';
+const DEFAULT_DESC=['{#story}','**As a** {role|…}','**I want** {want|…}','**so that** {why|…}','','{/story}','{#criteria}','**Acceptance criteria**','{criteria}','','{/criteria}','**Priority:** {priority}','**Owner:** {owner}','**Due:** {due}'].join('\n');
+const CARD_DEFAULTS={cardTitle:DEFAULT_TITLE,cardDesc:DEFAULT_DESC,checklistName:'Checklist'};
+const REPORT_DEFAULTS={doneWords:'done',skipWords:'product backlog, feedback',feedbackWords:'feedback',testWords:'testing, test, qa',wipWord:'max',staleDays:7,
+  checks:{owner:true,checklist:true,testing:true,done:true,stale:true}};
+const reportCfg=()=>{const r=(S.settings&&S.settings.report)||{};return{...REPORT_DEFAULTS,...r,checks:{...REPORT_DEFAULTS.checks,...(r.checks||{})}}};
+// "done, finished" becomes a test for a list name that contains one of the words as a whole word. No words: nothing matches.
+const wordsRe=csv=>{const w=String(csv||'').split(',').map(x=>x.trim()).filter(Boolean).map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));return w.length?new RegExp('(?<![A-Za-z0-9])(?:'+w.join('|')+')(?![A-Za-z0-9])','i'):/$^/};
+/* Dates and times: language, how a date is written, 12 or 24 hour clock, and the time a card is due. The defaults are what the app always did. */
+const DATES_DEFAULTS={locale:'en-GB',dateStyle:'short',hour12:'',dueTime:'17:00'};
+const LOCALES=[['en-GB','English (UK)'],['en-US','English (US)'],['en-AU','English (Australia)'],['en-SG','English (Singapore)'],['ms-MY','Bahasa Malaysia'],['id-ID','Bahasa Indonesia'],['zh-CN','中文 (简体)'],['de-DE','Deutsch'],['fr-FR','Français'],['es-ES','Español'],['ja-JP','日本語'],['','Same as my computer']];
+const DATE_STYLES=[['short','17 Oct'],['medium','17 Oct 2026'],['long','17 October 2026'],['numeric','17/10/2026 (as your language writes it)'],['iso','2026-10-17']];
+const datesCfg=()=>({...DATES_DEFAULTS,...((S.settings&&S.settings.dates)||{})});
+const loc=()=>datesCfg().locale||undefined;
+const hourOpt=()=>{const h=datesCfg().hour12;return h==='12'?{hour12:true}:h==='24'?{hour12:false}:{}};
+function fmtDate(d){
+  if(!d||!/^\d{4}-\d{2}-\d{2}$/.test(d))return'';
+  const c=datesCfg();if(c.dateStyle==='iso')return d;
+  const o={short:{day:'numeric',month:'short'},medium:{day:'numeric',month:'short',year:'numeric'},long:{day:'numeric',month:'long',year:'numeric'},numeric:{day:'2-digit',month:'2-digit',year:'numeric'}}[c.dateStyle]||{day:'numeric',month:'short'};
+  try{return new Date(d+'T12:00:00').toLocaleDateString(loc(),o)}catch(e){return d}
+}
+const stampLong=d=>{try{return d.toLocaleString(loc(),hourOpt())}catch(e){return d.toLocaleString()}};
+const stampTime=d=>{try{return d.toLocaleTimeString(loc(),hourOpt())}catch(e){return d.toLocaleTimeString()}};
+/* Story fields. The built-in fields can be hidden or renamed, and a team can add its own: short text, long text, number, date or a choice.
+   A hidden field keeps its data. Values of your own fields are stored on the story under `extra`. */
+const BUILTIN_FIELDS={
+  role:{label:'Who is it for?',hint:'e.g. a student'},
+  want:{label:'What do they want to do?',hint:''},
+  why:{label:'Why?',hint:'the benefit'},
+  ac:{label:"How do we know it's done?",hint:'one line each'},
+  tasks:{label:'Tasks',hint:'optional, one per line'},
+  points:{label:'Points',hint:'effort, optional'},
+  owner:{label:'Owner',hint:'Trello name or @username'},
+  list:{label:'Trello list',hint:'optional, e.g. Sprint Backlog. Empty means the default list chosen in Step 2b'},
+  due:{label:'Due date',hint:'optional, empty means the Sprint Review date'}};
+const RESERVED_KEYS=new Set(['id','title','role','want','why','criteria','tasks','task','priority','pri','owner','due','points','pts','list','story','ac','done','benefit','check','extra']);
+const FIELD_TYPES=[['text','Short text'],['long','Long text'],['number','Number'],['date','Date'],['choice','Choice']];
+const fieldCfg=k=>{const o=(S.settings&&S.settings.fields&&S.settings.fields[k])||{};return{show:o.show!==false,label:(o.label&&o.label.trim())||BUILTIN_FIELDS[k].label}};
+const customFields=()=>{const a=S.settings&&S.settings.customFields;return Array.isArray(a)?a:[]};
+const slug=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+const customByName=n=>{const q=slug(n);return q?customFields().find(c=>c.key===q||slug(c.label)===q):undefined};
+const cardFields=()=>[...CARD_FIELDS,...customFields().map(c=>c.key)];
+// A value typed for one of your own fields: returns it cleaned, '' when empty, or null when it does not fit the field.
+function cleanExtra(c,v){
+  v=String(v??'').trim();if(!v)return'';
+  if(c.type==='number')return/^-?\d+(\.\d+)?$/.test(v)?v:null;
+  if(c.type==='date')return/^\d{4}-\d{2}-\d{2}$/.test(v)?v:null;
+  if(c.type==='choice'){const o=(c.options||[]).find(x=>x.toLowerCase()===v.toLowerCase());return o??null}
+  return v.slice(0,2000);
+}
+const extraShown=(c,v)=>c.type==='date'?fmtDate(v):String(v??'');
+function reportMatchers(){
+  const rc=reportCfg();
+  return{doneRe:wordsRe(rc.doneWords),skipRe:wordsRe(rc.skipWords),fbRe:wordsRe(rc.feedbackWords),testRe:wordsRe(rc.testWords),
+    wipRe:rc.wipWord.trim()?new RegExp(rc.wipWord.trim().replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*(\\d+)','i'):null};
+}
+/* Board setup page: the lists, extra labels and Definition of Done a new board starts with. */
+const SETUP_DEFAULTS={
+  lists:['Product Backlog','Sprint Backlog','Doing (max 3)','In Review (max 4)','Testing / QA','Done · Sprint 1','Client Feedback'].join('\n'),
+  labels:['Feature','Bug','Docs / Report','AI feature','Blocked'].join('\n'),
+  dod:['Acceptance criteria shown to the PO','Code reviewed by 1 teammate','CI passes','Tests pass','Card ID in branch, commits and PR title'].join('\n')};
+const setupCfg=()=>({...SETUP_DEFAULTS,...((S.settings&&S.settings.setup)||{})});
+const cfg=()=>({...ID_DEFAULTS,...CARD_DEFAULTS,...(S.settings||{})});
+const ID_OK=/^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)*-\d+$/;
+const cleanPrefix=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9-]/g,'').replace(/^[^A-Z]+/,'').replace(/-+$/,'').slice(0,12);
+const idNum=(id,pre)=>{const m=String(id||'').match(/^(.*)-(\d+)$/);return m&&m[1].toUpperCase()===pre?+m[2]:0};
+const nextId=()=>{const {idPrefix:p,idPad:w}=cfg();return p+'-'+String(S.stories.reduce((m,s)=>Math.max(m,idNum(s.id,p)),0)+1).padStart(w,'0')};
+// Every prefix in use, newest setting first. This is the value for CARD_PREFIX in the PR sync workflow.
+const prefixesInUse=()=>[...new Set([cfg().idPrefix,...S.stories.map(s=>String(s.id||'').replace(/-\d+$/,'').toUpperCase()).filter(Boolean)])];
+/* Priorities. The list, the names and the Trello label colours are settings, so a team can use High/Medium/Low or P1/P2/P3.
+   A story stores the priority's key. The key never changes when a name is edited, so stories keep their priority. */
+const DEFAULT_PRIS=[{key:'Must',name:'Must have',color:'red'},{key:'Should',name:'Should have',color:'orange'},{key:'Could',name:'Could have',color:'green'},{key:"Won't",name:"Won't (this time)",color:'black'}];
+const TRELLO_COLORS=['green','yellow','orange','red','purple','blue','sky','lime','pink','black'];
+const pris=()=>{const a=S.settings&&S.settings.priorities;return Array.isArray(a)&&a.length?a:DEFAULT_PRIS};
+const priOf=k=>pris().find(p=>p.key===k);
+const priName=k=>(priOf(k)||{}).name||k;
+// The priority a new story starts with. The form starts on the first one, bulk import and old files on the second, unless a default is chosen.
+const defPri=kind=>{const d=S.settings&&S.settings.priDefault,l=pris();return priOf(d)?d:(kind==='form'?l[0]:(l[1]||l[0])).key};
+// Jira and Linear have fixed scales, so the priorities map by position, highest first.
+const JIRA_SCALE=['Highest','High','Medium','Low','Lowest'],LINEAR_SCALE=['Urgent','High','Medium','Low','No priority'];
+const scaleFor=(k,scale)=>{const i=pris().findIndex(p=>p.key===k);return i<0?'Medium':scale[Math.min(i,scale.length-1)]};
+// "pri: should", "pri: S" or "pri: Should have" all find the priority. Exact name or key first, then a start of one, then a value that starts with a key.
+function matchPri(v){
+  const x=String(v||'').trim().toLowerCase();if(!x)return null;
+  const L=pris(),eq=p=>p.key.toLowerCase()===x||p.name.toLowerCase()===x,st=p=>p.key.toLowerCase().startsWith(x)||p.name.toLowerCase().startsWith(x),sw=p=>x.startsWith(p.key.toLowerCase());
+  return (L.find(eq)||L.find(st)||L.find(sw)||{}).key||null;
+}
+// Settings from a saved file: anything wrong falls back to the default.
+function cleanSettings(st){
+  st=st||{};const out={idPrefix:cleanPrefix(st.idPrefix)||ID_DEFAULTS.idPrefix,idPad:[1,2,3,4].includes(+st.idPad)?+st.idPad:ID_DEFAULTS.idPad};
+  if(Array.isArray(st.priorities)){
+    const seen=new Set(),a=[];
+    for(const p of st.priorities){
+      if(!p||typeof p.key!=='string'||typeof p.name!=='string')continue;
+      const key=p.key.trim().slice(0,40),name=p.name.trim().slice(0,60);
+      if(!key||!name||seen.has(key.toLowerCase()))continue;
+      seen.add(key.toLowerCase());a.push({key,name,color:TRELLO_COLORS.includes(p.color)?p.color:''});
+    }
+    if(a.length)out.priorities=a;
+  }
+  if(typeof st.cardTitle==='string'&&!titleProblem(st.cardTitle))out.cardTitle=st.cardTitle.trim().slice(0,200);
+  if(typeof st.cardDesc==='string'&&st.cardDesc.trim())out.cardDesc=st.cardDesc.slice(0,3000);
+  if(typeof st.checklistName==='string'&&st.checklistName.trim())out.checklistName=st.checklistName.trim().slice(0,60);
+  if(st.report&&typeof st.report==='object'){
+    const r=st.report,o={};
+    for(const k of ['doneWords','skipWords','feedbackWords','testWords','wipWord'])if(typeof r[k]==='string'&&r[k].length<=200&&r[k]!==REPORT_DEFAULTS[k])o[k]=r[k];
+    if(Number.isInteger(+r.staleDays)&&+r.staleDays>=1&&+r.staleDays<=365&&+r.staleDays!==REPORT_DEFAULTS.staleDays)o.staleDays=+r.staleDays;
+    if(r.checks&&typeof r.checks==='object'){const c={};for(const k of Object.keys(REPORT_DEFAULTS.checks))if(r.checks[k]===false)c[k]=false;if(Object.keys(c).length)o.checks=c}
+    if(Object.keys(o).length)out.report=o;
+  }
+  if(st.setup&&typeof st.setup==='object'){
+    const o={};
+    for(const k of Object.keys(SETUP_DEFAULTS))if(typeof st.setup[k]==='string'&&st.setup[k].length<=3000&&st.setup[k]!==SETUP_DEFAULTS[k])o[k]=st.setup[k];
+    if(Object.keys(o).length)out.setup=o;
+  }
+  if(st.dates&&typeof st.dates==='object'){
+    const d=st.dates,o={};
+    if(typeof d.locale==='string'&&LOCALES.some(l=>l[0]===d.locale)&&d.locale!==DATES_DEFAULTS.locale)o.locale=d.locale;
+    if(DATE_STYLES.some(x=>x[0]===d.dateStyle)&&d.dateStyle!==DATES_DEFAULTS.dateStyle)o.dateStyle=d.dateStyle;
+    if(d.hour12==='12'||d.hour12==='24')o.hour12=d.hour12;
+    if(typeof d.dueTime==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(d.dueTime)&&d.dueTime!==DATES_DEFAULTS.dueTime)o.dueTime=d.dueTime;
+    if(Object.keys(o).length)out.dates=o;
+  }
+  if(st.fields&&typeof st.fields==='object'){
+    const o={};
+    for(const k of Object.keys(BUILTIN_FIELDS)){
+      const f=st.fields[k];if(!f||typeof f!=='object')continue;const e={};
+      if(f.show===false)e.show=false;
+      if(typeof f.label==='string'&&f.label.trim()&&f.label.trim()!==BUILTIN_FIELDS[k].label)e.label=f.label.trim().slice(0,60);
+      if(Object.keys(e).length)o[k]=e;
+    }
+    if(Object.keys(o).length)out.fields=o;
+  }
+  if(Array.isArray(st.customFields)){
+    const seen=new Set(),a=[];
+    for(const c of st.customFields){
+      if(!c||typeof c.key!=='string'||typeof c.label!=='string')continue;
+      const key=c.key.trim();if(!/^[a-z][a-z0-9_]{0,30}$/.test(key)||RESERVED_KEYS.has(key)||seen.has(key))continue;
+      const label=c.label.trim().slice(0,40);if(!label)continue;
+      const type=FIELD_TYPES.some(t=>t[0]===c.type)?c.type:'text',e={key,label,type};
+      if(type==='choice'){
+        const opts=(Array.isArray(c.options)?c.options:[]).filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim().slice(0,40)).slice(0,20);
+        if(!opts.length)continue;e.options=[...new Set(opts)];
+      }
+      seen.add(key);a.push(e);if(a.length>=12)break;
+    }
+    if(a.length)out.customFields=a;
+  }
+  const known=out.priorities||DEFAULT_PRIS;
+  if(typeof st.priDefault==='string'&&known.some(p=>p.key===st.priDefault))out.priDefault=st.priDefault;
+  return out;
+}
+// Re-draws the page but keeps what was typed in the story form and the bulk box, which a settings change would otherwise wipe.
+function keepForm(fn){
+  const ids=['title','id','role','want','why','ac','tasks','points','pri','owner','list','due'].map(k=>'f-'+k).concat('bulk',customFields().map(c=>'f-x-'+c.key)),keep={};
+  ids.forEach(i=>{const e=document.getElementById(i);if(e)keep[i]=e.value});
+  fn();
+  ids.forEach(i=>{const e=document.getElementById(i);if(e&&keep[i]!==undefined&&!(e.tagName==='SELECT'&&![...e.options].some(o=>o.value===keep[i])))e.value=keep[i]});
+}
+const idTaken=(id,except)=>S.stories.some((x,i)=>i!==except&&String(x.id).toLowerCase()===String(id).toLowerCase());
+const fmt=fmtDate;
 
 /* what gets pasted into Trello */
-const cardTitle=s=>`${s.id} · ${s.title}${s.points?` [${s.points}]`:''}`;
-function cardDesc(s){
-  const L=[];
-  if(s.role||s.want||s.why)L.push(`**As a** ${s.role||'…'}`,`**I want** ${s.want||'…'}`,`**so that** ${s.why||'…'}`,'');
-  const ac=lines(s.ac);
-  if(ac.length){L.push('**Acceptance criteria**',...ac.map(a=>'- '+a),'')}
-  L.push(`**Priority:** ${s.pri}`);
-  if(s.owner)L.push(`**Owner:** ${s.owner}`);
-  if(s.due)L.push(`**Due:** ${fmt(s.due)}`);
-  else if(S.review)L.push(`**Due:** sprint Review, ${fmt(S.review)}`);
-  return L.join('\n');
+/* Card format. The title and the description are templates with {fields}.
+   Description: a line is left out when every field on it is empty; {name|text} uses "text" when the field is empty;
+   lines between {#name} and {/name} appear only when that field has a value ({#story} means any of role, want or why). */
+const CARD_FIELDS=['id','title','role','want','why','criteria','tasks','priority','owner','due','points','list','story'];
+function storyValsBase(s){
+  return{id:s.id||'',title:s.title||'',role:s.role||'',want:s.want||'',why:s.why||'',
+    criteria:lines(s.ac).map(a=>'- '+a).join('\n'),tasks:lines(s.tasks).map(a=>'- '+a).join('\n'),
+    priority:priName(s.pri),owner:s.owner||'',points:String(s.points||''),list:s.list||'',
+    due:s.due?fmt(s.due):(S.review?`sprint Review, ${fmt(S.review)}`:''),
+    story:[s.role,s.want,s.why].some(Boolean)?'1':''};
 }
+function storyVals(s){const v=storyValsBase(s);customFields().forEach(c=>{v[c.key]=extraShown(c,(s.extra||{})[c.key])});return v}
+function renderDesc(tpl,vals){
+  const out=[],stack=[];
+  for(const raw of String(tpl).split('\n')){
+    const t=raw.trim(),open=t.match(/^\{#(\w+)\}$/),close=t.match(/^\{\/(\w+)\}$/);
+    if(open){stack.push(!!vals[open[1]]);continue}
+    if(close){stack.pop();continue}
+    if(stack.includes(false))continue;
+    let used=0,filled=0;
+    const line=raw.replace(/\{(\w+)(?:\|([^}]*))?\}/g,(m,k,fb)=>{
+      if(!(k in vals))return m;
+      used++;const v=vals[k];
+      if(v){filled++;return v}
+      if(fb!==undefined){filled++;return fb}
+      return'';
+    });
+    if(used&&!filled)continue;
+    out.push(line);
+  }
+  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+const renderTitle=(tpl,s)=>String(tpl).replace(/\{(id|title|points)\}/g,(m,k)=>k==='points'?(s.points?`[${s.points}]`:''):(s[k]||'')).replace(/ {2,}/g,' ').trim();
+// The PR sync finds a card by the ID at the start of its title, and the Review report reads the points from the end.
+function titleProblem(t){
+  t=String(t).trim();
+  if(!t.startsWith('{id}'))return 'The title must start with {id}, because the PR sync finds the card by the ID at the start.';
+  if(!t.includes('{title}'))return 'The title needs {title}.';
+  const i=t.indexOf('{points}');
+  if(i>=0&&t.slice(i)!=='{points}')return '{points} must come last, because the Review report reads the points from the end of the title.';
+  return'';
+}
+const unknownFields=t=>[...new Set([...String(t).matchAll(/\{[#\/]?(\w+)(?:\|[^}]*)?\}/g)].map(m=>m[1]).filter(k=>!cardFields().includes(k)))];
+const cardTitle=s=>renderTitle(cfg().cardTitle,s);
+const cardDesc=s=>renderDesc(cfg().cardDesc,storyVals(s));
 const cardTasks=s=>(lines(s.tasks).length?lines(s.tasks):lines(s.ac)).join('\n');
 
 /* ---------- pages ---------- */
@@ -205,7 +431,8 @@ function render(){
     .map(([k,a,b])=>`<button data-p="${k}" class="${page===k?'on':''}"><b>${a}</b>${b}</button>`).join('');
   document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>goPage(b.dataset.p));
   $('#main').className='pg-'+page;
-  $('#main').innerHTML=({write:pWrite,copy:pCopy,push:pPush,report:pReport,setup:pSetup})[page]();
+  $('#settingsBtn').classList.toggle('on',page==='settings');
+  $('#main').innerHTML=({write:pWrite,copy:pCopy,push:pPush,report:pReport,settings:pSettings})[page]();
   if($('#main').querySelectorAll('.panel').length>8)$('#main').classList.add('lite');
   bind();
 }
@@ -215,9 +442,9 @@ let fq='',fpri='';
 function storyList(){
   if(!S.stories.length)return'<p class="mute">Nothing yet. Add your first story above.</p>';
   const q=fq.trim().toLowerCase(),filtered=!!(q||fpri),n=S.stories.length;
-  const rows=S.stories.map((x,i)=>[x,i]).filter(([x])=>(!fpri||x.pri===fpri)&&(!q||[x.id,x.title,x.owner,x.list,x.role,x.want].join(' ').toLowerCase().includes(q)));
+  const rows=S.stories.map((x,i)=>[x,i]).filter(([x])=>(!fpri||x.pri===fpri)&&(!q||[x.id,x.title,x.owner,x.list,x.role,x.want,...Object.values(x.extra||{})].join(' ').toLowerCase().includes(q)));
   if(!rows.length)return'<p class="mute">No story matches.</p>';
-  return rows.map(([x,i])=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(x.pri)}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}${x.list?' · → '+esc(x.list):''}${x.due?' · due '+esc(fmt(x.due)):''}</div></div>
+  return rows.map(([x,i])=>`<div class="item"><div class="grow"><b>${esc(x.id)}</b> ${esc(x.title)}<div class="mute">${esc(priName(x.pri))}${x.points?' · '+x.points+' pts':''}${x.owner?' · '+esc(x.owner):' · no owner'}${x.list?' · → '+esc(x.list):''}${x.due?' · due '+esc(fmt(x.due)):''}</div></div>
     ${filtered?'':`<button class="btn link" data-up="${i}" ${i?'':'disabled'} title="Move up" aria-label="Move up">↑</button><button class="btn link" data-down="${i}" ${i<n-1?'':'disabled'} title="Move down" aria-label="Move down">↓</button>`}
     <button class="btn link" data-edit="${i}">Edit</button><button class="btn link" data-dup="${i}">Duplicate</button><button class="btn link" data-del="${i}">Delete</button></div>`).join('');
 }
@@ -243,78 +470,176 @@ function bindList(){
     undoToast(`Deleted ${s.id}.`,()=>{S.stories.splice(Math.min(idx,S.stories.length),0,s);save();refreshList()});
   });
 }
+function formFields(s){
+  const ex=s.extra||{},fc=fieldCfg,sh=k=>fc(k).show;
+  const lab=(k,id)=>`<label for="${id}">${esc(fc(k).label)}${BUILTIN_FIELDS[k].hint&&k!=='list'&&k!=='due'?` <small>${esc(BUILTIN_FIELDS[k].hint)}</small>`:''}</label>`;
+  const F={
+    role:()=>`<div>${lab('role','f-role')}<input id="f-role" value="${esc(s.role)}"></div>`,
+    want:()=>`<div>${lab('want','f-want')}<input id="f-want" value="${esc(s.want)}"></div>`,
+    why:()=>`<div>${lab('why','f-why')}<input id="f-why" value="${esc(s.why)}"></div>`,
+    ac:()=>`<div>${lab('ac','f-ac')}<textarea id="f-ac" rows="3" placeholder="Given a valid account, when I log in, then I see Home in 2 seconds">${esc(s.ac)}</textarea></div>`,
+    tasks:()=>`<div>${lab('tasks','f-tasks')}<textarea id="f-tasks" rows="3" placeholder="Leave empty to use the lines on the left as the checklist">${esc(s.tasks)}</textarea></div>`,
+    points:()=>`<div>${lab('points','f-points')}<input id="f-points" type="number" min="0" value="${esc(s.points)}"></div>`,
+    pri:()=>`<div><label for="f-pri">Priority</label><select id="f-pri">${[...pris().map(p=>[p.key,p.name]),...(priOf(s.pri)?[]:[[s.pri,s.pri]])].map(([v,l])=>`<option value="${esc(v)}" ${s.pri===v?'selected':''}>${esc(l)}</option>`).join('')}</select></div>`,
+    owner:()=>`<div>${lab('owner','f-owner')}
+        <input id="f-owner" list="owners" placeholder="Separate several with commas" value="${esc(s.owner)}" autocomplete="off">
+        <datalist id="owners">${[...new Set([...TB.members.map(m=>m.fullName||m.username),...S.stories.flatMap(x=>String(x.owner||'').split(',').map(n=>n.trim()))].filter(Boolean))].map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>`};
+  const group=keys=>{const parts=keys.filter(k=>k==='pri'||sh(k)).map(k=>F[k]());return parts.length?`<div class="cols" style="--n:${parts.length}">${parts.join('')}</div>`:''};
+  const custom=customFields().map(c=>{
+    const id='f-x-'+c.key,v=ex[c.key]||'';
+    const input=c.type==='long'?`<textarea id="${id}" rows="2">${esc(v)}</textarea>`
+      :c.type==='choice'?`<select id="${id}"><option value="">-</option>${[...(c.options||[]),...(v&&!(c.options||[]).includes(v)?[v]:[])].map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`
+      :`<input id="${id}" type="${c.type==='number'?'number" step="any':c.type==='date'?'date':'text'}" value="${esc(v)}">`;
+    return `<div><label for="${id}">${esc(c.label)}</label>${input}</div>`;
+  });
+  return group(['role','want','why'])+group(['ac','tasks'])+group(['points','pri','owner'])
+    +(sh('list')?`<label for="f-list">${esc(fc('list').label)} <small>${esc(BUILTIN_FIELDS.list.hint)}</small></label>
+    <input id="f-list" placeholder="Default list" value="${esc(s.list)}" autocomplete="off">
+    ${TB.lists.length?`<div class="chips"><button class="btn" data-chip="">Default</button>${TB.lists.map(l=>`<button class="btn" data-chip="${esc(l.name)}">${esc(l.name)}</button>`).join('')}</div>`:''}`:'')
+    +(sh('due')?`<label for="f-due">${esc(fc('due').label)} <small>${esc(BUILTIN_FIELDS.due.hint)}</small></label>
+    <input id="f-due" type="date" value="${esc(s.due||'')}">`:'')
+    +(custom.length?`<div class="cols" style="--n:${Math.min(custom.length,3)};margin-top:4px">${custom.join('')}</div>`:'');
+}
 function pWrite(){
-  const s=editing!==null?S.stories[editing]:{title:'',role:'',want:'',why:'',ac:'',points:'',pri:'Must',tasks:'',owner:'',list:'',due:''};
+  const s=editing!==null?S.stories[editing]:{id:'',title:'',role:'',want:'',why:'',ac:'',points:'',pri:defPri('form'),tasks:'',owner:'',list:'',due:''};
+  const idLocked=editing!==null&&!!s.cardId;   // the ID is in the card's title on Trello, so it stays once pushed
   return `
   <div class="stack">
   <div class="panel">
     <h2>${editing!==null?'Edit '+esc(s.id):'Add a story'}</h2>
-    <label>Story title <small>short, e.g. “Log in with UNIMAS email”</small></label>
-    <input id="f-title" value="${esc(s.title)}">
-    <div class="three">
-      <div><label>Who is it for? <small>e.g. a student</small></label><input id="f-role" value="${esc(s.role)}"></div>
-      <div><label>What do they want to do?</label><input id="f-want" value="${esc(s.want)}"></div>
-      <div><label>Why? <small>the benefit</small></label><input id="f-why" value="${esc(s.why)}"></div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(110px,170px);gap:10px;align-items:end">
+      <div><label>Story title <small>short, e.g. “Log in with UNIMAS email”</small></label>
+        <input id="f-title" value="${esc(s.title)}"></div>
+      <div><label>ID <small>${idLocked?'already on Trello':'optional'}</small></label>
+        <input id="f-id" value="${esc(editing!==null?s.id:'')}" placeholder="${esc(editing!==null?s.id:nextId())}" ${idLocked?'disabled':''} autocomplete="off" title="${idLocked?'This story has a card on Trello, so its ID stays.':'Leave empty to number automatically, or type your own, like FR-AI-01.'}"></div>
     </div>
-    <div class="two">
-      <div><label>How do we know it's done? <small>one line each</small></label>
-        <textarea id="f-ac" rows="3" placeholder="Given a valid account, when I log in, then I see Home in 2 seconds">${esc(s.ac)}</textarea></div>
-      <div><label>Tasks <small>optional, one per line</small></label>
-        <textarea id="f-tasks" rows="3" placeholder="Leave empty to use the lines on the left as the checklist">${esc(s.tasks)}</textarea></div>
-    </div>
-    <div class="three">
-      <div><label>Points <small>effort, optional</small></label><input id="f-points" type="number" min="0" value="${esc(s.points)}"></div>
-      <div><label>Priority</label><select id="f-pri">${[['Must','Must have'],['Should','Should have'],['Could','Could have'],["Won't","Won't (this time)"]].map(([v,l])=>`<option value="${v}" ${s.pri===v?'selected':''}>${l}</option>`).join('')}</select></div>
-      <div><label>Owner <small>Trello name or @username</small></label>
-        <input id="f-owner" list="owners" placeholder="Separate several with commas" value="${esc(s.owner)}" autocomplete="off">
-        <datalist id="owners">${[...new Set([...TB.members.map(m=>m.fullName||m.username),...S.stories.flatMap(x=>String(x.owner||'').split(',').map(n=>n.trim()))].filter(Boolean))].map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
-    </div>
-    <label>Trello list <small>optional, e.g. Sprint Backlog. Empty means the default list chosen in Step 2b</small></label>
-    <input id="f-list" placeholder="Default list" value="${esc(s.list)}" autocomplete="off">
-    ${TB.lists.length?`<div class="chips"><button class="btn" data-chip="">Default</button>${TB.lists.map(l=>`<button class="btn" data-chip="${esc(l.name)}">${esc(l.name)}</button>`).join('')}</div>`:''}
-    <label>Due date <small>optional, empty means the Sprint Review date</small></label>
-    <input id="f-due" type="date" value="${esc(s.due||'')}">
+    ${formFields(s)}
     <div class="big"><button class="btn p" id="save">${editing!==null?'Save changes':'Add story'}</button>${editing!==null?'<button class="btn" id="cancel">Cancel</button>':''}</div>
-  </div>
-  <div class="panel">
-    <h2>Your stories (<span id="story-count">${S.stories.length}</span>)</h2>
-    ${S.stories.length>=4?`<div class="item" style="border-top:0;padding-top:0"><input id="f-q" placeholder="Search stories" value="${esc(fq)}" style="flex:1"><select id="f-fp" style="width:auto"><option value="">All priorities</option>${['Must','Should','Could',"Won't"].map(v=>`<option ${fpri===v?'selected':''}>${v}</option>`).join('')}</select></div>`:''}
-    <div id="story-list">${storyList()}</div>
-    ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
-    <div class="mute" style="margin-top:10px"><button class="btn link" id="exp">Save stories to a file</button><label class="btn link" style="margin:0;cursor:pointer">Load stories from a file<input type="file" id="imp" accept=".json" hidden></label><br>A copy of your stories only, not your Trello settings. Load it to restore them or move to another computer.</div>
-    ${S.stories.length?`<div class="mute" style="margin-top:10px">Use another tool? Export as <select id="exp-fmt" style="width:auto;display:inline-block">${EXP_FORMATS.map(([k,l])=>`<option value="${k}" ${expFmt===k?'selected':''}>${l}</option>`).join('')}</select> <button class="btn link" id="exp-dl">Download</button><button class="btn link" id="exp-copy">Copy</button></div>`:''}
   </div>
   </div>
   <div class="stack">
   <div class="panel">
-    <h2>Bulk import from text</h2>
+    <div class="tabbar" role="tablist">
+      <button role="tab" data-wt="stories" class="${writeTab==='stories'?'on':''}">Your stories (<span id="story-count">${S.stories.length}</span>)</button>
+      <button role="tab" data-wt="bulk" class="${writeTab==='bulk'?'on':''}">Bulk import</button>
+    </div>
+    <div id="wt-stories" ${writeTab==='stories'?'':'hidden'}>
+    ${S.stories.length>=4?`<div class="item" style="border-top:0;padding-top:0"><input id="f-q" placeholder="Search stories" value="${esc(fq)}" style="flex:1"><select id="f-fp" style="width:auto"><option value="">All priorities</option>${pris().map(p=>`<option value="${esc(p.key)}" ${fpri===p.key?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>`:''}
+    <div id="story-list">${storyList()}</div>
+    ${S.stories.length?'<div class="big"><button class="btn p" data-p="copy">Next: copy to Trello →</button></div>':''}
+    <div class="mute" style="margin-top:10px"><button class="btn link" id="exp">Save stories to a file</button><label class="btn link" style="margin:0;cursor:pointer">Load stories from a file<input type="file" id="imp" accept=".json" hidden></label><br>A copy of your stories only, not your Trello settings. Load it to restore them or move to another computer.</div>
+    ${S.stories.length?`<div class="mute" style="margin-top:10px">Use another tool? Export as <select id="exp-fmt" style="width:auto;display:inline-block">${EXP_FORMATS.map(([k,l])=>`<option value="${k}" ${expFmt===k?'selected':''}>${l}</option>`).join('')}</select> <button class="btn link" id="exp-dl">Download</button><button class="btn link" id="exp-copy">Copy</button></div>`:''}
+    </div>
+    <div id="wt-bulk" ${writeTab==='bulk'?'':'hidden'}>
     <p class="mute" style="margin-top:0">Paste several stories, with a blank line between them. Only the title (the first line) is required.</p>
-    <textarea id="bulk" style="min-height:290px" placeholder="${esc(TEMPLATE_TEXT).replace(/\n/g,'&#10;')}"></textarea>
+    <textarea id="bulk" style="min-height:290px" placeholder="${esc(templateText()).replace(/\n/g,'&#10;')}"></textarea>
     <div class="big"><button class="btn p" id="bulk-go">Import stories</button><button class="btn" id="tpl">Copy template</button></div>
-    <p class="mute" style="margin:10px 0 0">Using an AI assistant? Copy the template, give it your notes, then paste its answer above. The priority (pri) is Must, Should, Could or Won't.</p>
+    <p class="mute" style="margin:10px 0 0">Using an AI assistant? Copy the template, give it your notes, then paste its answer above. The priority (pri) is ${pris().map(p=>esc(p.key)).join(', ')}. An <code>id:</code> line is optional.</p>
+    </div>
   </div>
   </div>`;
 }
 
-const TEMPLATE_TEXT=[
-  'Short title of the story','role: who it is for','want: what they want to do','why: the benefit',
-  'points: 3','pri: Must','owner: Trello name','list: Trello list (optional)','due: 2026-10-16 (optional, YYYY-MM-DD)','ac: Given ..., when ..., then ...','ac: add one line for each check',
-  'tasks: one small task','tasks: add one line for each task'].join('\n');
-const PRI_MAP=[[/^m/i,'Must'],[/^s/i,'Should'],[/^c/i,'Could'],[/^w/i,"Won't"]];
+
+/* ---------- Settings page: one section at a time, with a menu on the left ---------- */
+let settingsTab='stories',writeTab='stories';
+const SET_TABS=[['stories','Stories','IDs and fields'],['priorities','Priorities','and labels'],['card','Card format','title and description'],['report','Report','how it reads the board'],['dates','Dates and times',''],['board','Board setup','lists, labels, Definition of Done']];
+const setIds=()=>`  <div class="panel">
+    <h2>Story IDs</h2>
+    <label>Story ID prefix <small>new stories are numbered with it, next: <b>${esc(nextId())}</b></small></label>
+    <div class="two"><input id="set-prefix" value="${esc(cfg().idPrefix)}" maxlength="12" autocomplete="off" aria-label="Story ID prefix">
+      <select id="set-pad" aria-label="Digits in the number">${[1,2,3,4].map(n=>`<option value="${n}" ${cfg().idPad===n?'selected':''}>${n} digit${n>1?'s':''}</option>`).join('')}</select></div>
+    <p class="mute" style="margin:8px 0 0">Stories you already have keep their IDs, because the ID is part of the card's title on Trello. You can also type any ID (like FR-AI-01) when you add a story.</p>
+    <p class="mute" style="margin:8px 0 0">Using the PR to card sync? Set <code>CARD_PREFIX</code> to <code>${esc(prefixesInUse().join(','))}</code> in the workflow. <button class="btn link" data-copy="${esc(prefixesInUse().join(','))}" data-msg="Copied. Paste it as the CARD_PREFIX value in the workflow.">Copy</button></p>
+  </div>`;
+const setPriorities=()=>`  <div class="panel">
+    <h2>Priorities and labels</h2>
+    <p class="mute" style="margin-top:0">Highest first. The name is also the Trello label on the card. Pick a colour, or <i>No label</i> to add none.</p>
+    ${pris().map((p,i,a)=>`<div class="item pick"><input data-pname="${i}" value="${esc(p.name)}" maxlength="60" aria-label="Priority name" style="flex:1 1 140px;width:auto">
+      <select data-pcolor="${i}" aria-label="Label colour" style="width:auto;min-width:110px;flex:0 0 auto"><option value="">No label</option>${TRELLO_COLORS.map(c=>`<option ${p.color===c?'selected':''}>${c}</option>`).join('')}</select>
+      <button class="btn link" data-pup="${i}" ${i?'':'disabled'} aria-label="Move up">↑</button><button class="btn link" data-pdown="${i}" ${i<a.length-1?'':'disabled'} aria-label="Move down">↓</button>
+      <button class="btn link" data-pdel="${i}" ${a.length>1?'':'disabled'}>Delete</button></div>`).join('')}
+    <div class="big"><button class="btn" id="pri-add">Add a priority</button><button class="btn link" id="pri-reset">Reset to the default four</button></div>
+    <label>New stories start as <small>bulk import and loaded files use this too</small></label>
+    <select id="pri-def"><option value="">Automatic (${esc(priName(defPri('form')))} in the form, ${esc(priName(defPri('bulk')))} in bulk import)</option>${pris().map(p=>`<option value="${esc(p.key)}" ${(S.settings&&S.settings.priDefault)===p.key?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
+  </div>`;
+const setCard=()=>`  <div class="panel">
+    <h2>Card format</h2>
+    <p class="mute" style="margin-top:0">What the Trello card looks like. Fields go in curly brackets: <code>{id}</code> <code>{title}</code> <code>{points}</code> in the title, and <code>{role}</code> <code>{want}</code> <code>{why}</code> <code>{criteria}</code> <code>{tasks}</code> <code>{priority}</code> <code>{owner}</code> <code>{due}</code> <code>{points}</code> <code>{list}</code> in the description.${customFields().length?` Your own fields: ${customFields().map(c=>`<code>{${c.key}}</code>`).join(' ')}.`:''}</p>
+    <label>Card title <small>starts with {id}; {points} goes last</small></label>
+    <input id="card-title" value="${esc(cfg().cardTitle)}" autocomplete="off" aria-label="Card title template">
+    <label>Card description</label>
+    <textarea id="card-desc" rows="14" spellcheck="false" style="font-family:ui-monospace,Consolas,monospace;font-size:13px" aria-label="Card description template">${esc(cfg().cardDesc)}</textarea>
+    <p class="mute" style="margin:6px 0 0">A line is left out when every field on it is empty. <code>{role|…}</code> shows … when the field is empty. Lines between <code>{#criteria}</code> and <code>{/criteria}</code> show only when there are criteria (<code>{#story}</code> means any of role, want or why).</p>
+    <label>Checklist name <small>on each card</small></label>
+    <input id="card-cl" value="${esc(cfg().checklistName)}" maxlength="60" autocomplete="off" aria-label="Checklist name">
+    <p class="banner err" id="card-warn" style="margin:10px 0 0" hidden></p>
+    <label>Preview <small>${S.stories.length?'with your first story':'with a sample story'}</small></label>
+    <pre id="card-prev"></pre>
+    <div class="big"><button class="btn link" id="card-reset">Reset card format to the default</button></div>
+  </div>`;
+const setDates=()=>`  <div class="panel">
+    <h2>Dates and times</h2>
+    <p class="mute" style="margin-top:0">How dates are written on cards and in the report.</p>
+    <div class="two"><div><label>Language</label><select data-dt="locale">${LOCALES.map(([v,l])=>`<option value="${v}" ${datesCfg().locale===v?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+      <div><label>Date style</label><select data-dt="dateStyle">${DATE_STYLES.map(([v,l])=>`<option value="${v}" ${datesCfg().dateStyle===v?'selected':''}>${esc(l)}</option>`).join('')}</select></div></div>
+    <div class="two"><div><label>Clock</label><select data-dt="hour12">${[['','Follow the language'],['24','24 hour'],['12','12 hour (am/pm)']].map(([v,l])=>`<option value="${v}" ${datesCfg().hour12===v?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div><label>Cards are due at <small>on the due date</small></label><input type="time" data-dt="dueTime" value="${esc(datesCfg().dueTime)}"></div></div>
+    <p class="mute" style="margin:8px 0 0">Example: due ${esc(fmtDate('2026-10-17'))}, generated ${esc(stampLong(new Date(2026,9,6,14,32,5)))}. The due time uses your computer's time zone.</p>
+    <div class="big"><button class="btn link" id="dt-reset">Reset dates and times to the default</button></div>
+  </div>`;
+const setFields=()=>`  <div class="panel">
+    <h2>Story fields</h2>
+    <p class="mute" style="margin-top:0">Hide the fields you do not use, rename them, or add your own. Title, ID and priority are always there. A hidden field keeps its data.</p>
+    ${Object.keys(BUILTIN_FIELDS).map(k=>`<div class="item pick"><label style="margin:0;font-weight:400;flex:0 0 auto"><input type="checkbox" style="width:auto" data-fshow="${k}" ${fieldCfg(k).show?'checked':''}> Show</label><input data-flabel="${k}" value="${esc(fieldCfg(k).label)}" maxlength="60" style="flex:1 1 150px;width:auto" aria-label="Name of the ${esc(BUILTIN_FIELDS[k].label)} field"></div>`).join('')}
+    <h3 style="font-size:15px;margin:14px 0 2px">Your own fields</h3>
+    ${customFields().length?'':'<p class="mute" style="margin:4px 0">None yet. Add one for things like Module, Severity, Sprint or a link.</p>'}
+    ${customFields().map((c,i,a)=>`<div style="border-top:1px solid var(--line);padding:8px 0">
+      <div class="item pick" style="border:0;padding:0"><input data-cflabel="${i}" value="${esc(c.label)}" maxlength="40" style="flex:1 1 140px;width:auto" aria-label="Field name">
+        <select data-cftype="${i}" style="width:auto;flex:0 0 auto" aria-label="Field type">${FIELD_TYPES.map(([v,l])=>`<option value="${v}" ${c.type===v?'selected':''}>${l}</option>`).join('')}</select>
+        <button class="btn link" data-cfup="${i}" ${i?'':'disabled'} aria-label="Move up">↑</button><button class="btn link" data-cfdown="${i}" ${i<a.length-1?'':'disabled'} aria-label="Move down">↓</button><button class="btn link" data-cfdel="${i}">Delete</button></div>
+      ${c.type==='choice'?`<input data-cfopts="${i}" value="${esc((c.options||[]).join(', '))}" placeholder="Choices, separated by commas" style="margin-top:6px" aria-label="Choices">`:''}
+      <div class="mute" style="margin-top:4px">In a card description write <code>{${esc(c.key)}}</code>. In bulk import write <code>${esc(c.key)}: value</code>.</div></div>`).join('')}
+    <div class="big"><button class="btn" id="cf-add" ${customFields().length>=12?'disabled':''}>Add a field</button><button class="btn link" id="fields-reset">Reset fields to the default</button></div>
+  </div>`;
+function pSettings(){
+  const body={stories:()=>setIds()+setFields(),priorities:setPriorities,card:setCard,report:reportRules,dates:setDates,board:boardSection}[settingsTab]();
+  return `<div class="set-layout"><nav class="set-nav" aria-label="Settings sections">${SET_TABS.map(([k,a,b])=>`<button data-st="${k}" class="${k===settingsTab?'on':''}"><b>${a}</b>${b?`<span>${b}</span>`:''}</button>`).join('')}</nav><div class="set-body">${body}</div></div>`;
+}
+const reportLink=()=>`<p class="mute wide" style="margin:0">The report reads your lists by their names. <button class="btn link" data-gos="report">Change the report rules</button></p>`;
+
+const templateText=()=>{
+  const sh=k=>fieldCfg(k).show,L=['Short title of the story','id: FR-01 (optional, leave it out to number automatically)'];
+  if(sh('role'))L.push('role: who it is for');
+  if(sh('want'))L.push('want: what they want to do');
+  if(sh('why'))L.push('why: the benefit');
+  if(sh('points'))L.push('points: 3');
+  L.push('pri: '+pris()[0].key);
+  if(sh('owner'))L.push('owner: Trello name');
+  if(sh('list'))L.push('list: Trello list (optional)');
+  if(sh('due'))L.push('due: 2026-10-16 (optional, YYYY-MM-DD)');
+  if(sh('ac'))L.push('ac: Given ..., when ..., then ...','ac: add one line for each check');
+  if(sh('tasks'))L.push('tasks: one small task','tasks: add one line for each task');
+  customFields().forEach(c=>L.push(`${c.key}: ${c.label}${c.type==='choice'?' ('+(c.options||[]).join(' / ')+')':c.type==='date'?' (YYYY-MM-DD)':c.type==='number'?' (a number)':''}`));
+  return L.join('\n');
+};
 function parseStories(text){
   let skipped=0;
   const out=text.split(/\n\s*\n/).map(b=>b.split('\n').map(x=>x.trim()).filter(Boolean)).filter(b=>b.length).map(b=>{
-    const s={title:b[0].replace(/^title\s*:\s*/i,'').replace(/^(?:[-*•]|\d+[.)])\s+/,''),role:'',want:'',why:'',ac:'',points:'',pri:'Should',tasks:'',owner:'',list:'',due:''};
+    const s={title:b[0].replace(/^title\s*:\s*/i,'').replace(/^(?:[-*•]|\d+[.)])\s+/,''),role:'',want:'',why:'',ac:'',points:'',pri:defPri('bulk'),tasks:'',owner:'',list:'',due:''};
     const ac=[],tk=[];
     b.slice(1).forEach(l=>{
       const sent=l.match(/^as an?\s+(.+?),?\s+i want\s+(.+?),?\s+so that\s+(.+)$/i);
       if(sent){s.role=sent[1];s.want=sent[2];s.why=sent[3];return}
-      const m=l.match(/^(role|want|why|benefit|points|pts|pri|priority|owner|list|due|ac|done|tasks?|check)\s*:\s*(.*)$/i);
+      const cm=l.match(/^([^:]{1,40}?)\s*:\s*(.*)$/),cf=cm&&customByName(cm[1]);
+      if(cf){const val=cleanExtra(cf,cm[2]);if(val===null)skipped++;else if(val)(s.extra=s.extra||{})[cf.key]=val;return}
+      const m=l.match(/^(id|role|want|why|benefit|points|pts|pri|priority|owner|list|due|ac|done|tasks?|check)\s*:\s*(.*)$/i);
       if(!m){skipped++;return}
       const k=m[1].toLowerCase(),v=m[2].trim();
-      if(k==='ac'||k==='done')ac.push(v);
+      if(k==='id'){const t=v.split(/\s/)[0];if(ID_OK.test(t))s.id=t.toUpperCase();else skipped++}
+      else if(k==='ac'||k==='done')ac.push(v);
       else if(k==='task'||k==='tasks'||k==='check')tk.push(v);
-      else if(k==='pri'||k==='priority'){const p=PRI_MAP.find(([re])=>re.test(v));if(p)s.pri=p[1];else skipped++}
+      else if(k==='pri'||k==='priority'){const k2=matchPri(v);if(k2)s.pri=k2;else skipped++}
       else if(k==='points'||k==='pts')s.points=v.replace(/\D/g,'');
       else if(k==='benefit')s.why=v;
       else if(k==='due'){if(/^\d{4}-\d{2}-\d{2}$/.test(v))s.due=v;else if(v)skipped++}
@@ -326,23 +651,24 @@ function parseStories(text){
 }
 
 // Export, so the stories can go into any other tool (most tools can import a CSV file)
-const PRI_LABEL={Must:'Must have',Should:'Should have',Could:'Could have',"Won't":"Won't (this time)"};
 // A cell starting with = + - or @ is run as a formula by Excel and Sheets, so it gets a leading quote.
 const csvCell=v=>{const x=String(v??'');return '"'+(/^[=+\-@\t\r]/.test(x)?"'"+x:x).replace(/"/g,'""')+'"'};
 const plainOwner=o=>String(o||'').split(',').map(n=>n.trim().replace(/^@/,'')).filter(Boolean).join(', ');
 // Column names the Jira, Linear and Notion importers expect. Description holds the story, criteria and tasks.
 const CSV_FORMATS={
   generic:{head:['ID','Title','Summary','Description','Priority','Points','Owner','Acceptance criteria','Tasks'],
-    row:s=>[s.id,s.title,cardTitle(s),cardDesc(s),PRI_LABEL[s.pri]||s.pri,s.points,plainOwner(s.owner),lines(s.ac).join('\n'),lines(s.tasks).join('\n')]},
+    row:s=>[s.id,s.title,cardTitle(s),cardDesc(s),priName(s.pri),s.points,plainOwner(s.owner),lines(s.ac).join('\n'),lines(s.tasks).join('\n')]},
   jira:{head:['Summary','Issue Type','Priority','Story point estimate','Assignee','Description'],
-    row:s=>[cardTitle(s),'Story',{Must:'Highest',Should:'High',Could:'Medium',"Won't":'Low'}[s.pri]||'Medium',s.points,plainOwner(s.owner),cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'* '+x).join('\n'):'')]},
+    row:s=>[cardTitle(s),'Story',scaleFor(s.pri,JIRA_SCALE),s.points,plainOwner(s.owner),cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'* '+x).join('\n'):'')]},
   linear:{head:['Title','Description','Priority','Estimate','Assignee'],
-    row:s=>[cardTitle(s),cardDesc(s)+(lines(s.tasks).length?'\n\n'+lines(s.tasks).map(x=>'- [ ] '+x).join('\n'):''),{Must:'Urgent',Should:'High',Could:'Medium',"Won't":'Low'}[s.pri]||'Medium',s.points,plainOwner(s.owner)]},
+    row:s=>[cardTitle(s),cardDesc(s)+(lines(s.tasks).length?'\n\n'+lines(s.tasks).map(x=>'- [ ] '+x).join('\n'):''),scaleFor(s.pri,LINEAR_SCALE),s.points,plainOwner(s.owner)]},
   notion:{head:['Name','Priority','Points','Owner','Description'],
-    row:s=>[cardTitle(s),PRI_LABEL[s.pri]||s.pri,s.points,plainOwner(s.owner),cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'- '+x).join('\n'):'')]}
+    row:s=>[cardTitle(s),priName(s.pri),s.points,plainOwner(s.owner),cardDesc(s)+(lines(s.tasks).length?'\n\nTasks:\n'+lines(s.tasks).map(x=>'- '+x).join('\n'):'')]}
 };
 function storiesCSV(fmt='generic'){
-  const f=CSV_FORMATS[fmt]||CSV_FORMATS.generic,head=f.head,rows=S.stories.map(f.row);
+  const f=CSV_FORMATS[fmt]||CSV_FORMATS.generic;let head=f.head,rows=S.stories.map(f.row);
+  const cf=customFields();
+  if(f===CSV_FORMATS.generic&&cf.length){head=[...head,...cf.map(c=>c.label)];rows=rows.map((r,i)=>[...r,...cf.map(c=>extraShown(c,(S.stories[i].extra||{})[c.key]))])}
   return String.fromCharCode(0xFEFF)+[head,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n');
 }
 function storiesMarkdown(){
@@ -379,27 +705,40 @@ function exportStories(kind,copyIt){
   else saveFile(`stories-${kind==='csv'?'':kind+'-'}${day}.csv`,storiesCSV(kind),'text/csv;charset=utf-8',`${label} saved.`+(kind==='csv'?' Most tools can import it.':" Use that tool's CSV import and match the columns."));
 }
 
+let copySel=0;
+// The card the selected story will make: title, description and checklist, as they will be pasted.
+function copyPreview(i){
+  const st=S.stories[i];if(!st)return'';
+  const t=lines(cardTasks(st));
+  return `<h2 style="word-break:break-word">${esc(cardTitle(st))}</h2>
+    <label style="margin-top:0">Description</label><pre style="max-height:340px">${esc(cardDesc(st))}</pre>
+    ${t.length?`<label>Checklist <small>${t.length} item${t.length===1?'':'s'}</small></label><pre style="max-height:200px">${esc(t.join('\n'))}</pre>`:'<p class="mute">This story has no checklist.</p>'}`;
+}
 function pCopy(){
   if(!S.stories.length)return`<div class="panel"><p>Add some stories first.</p><button class="btn p" data-p="write">← Write stories</button></div>`;
   const titles=S.stories.map(cardTitle).join('\n');
+  if(copySel>=S.stories.length)copySel=0;
   return `
-  <div class="panel">
-    <h2>How to put this into Trello</h2>
-    <ol class="how">
+  <div class="panel wide head">
+    <div><h2>How to put this into Trello</h2>
+    <ol class="how" style="margin:0">
       <li>Open your board and click <b>+ Add a card</b> in the list you want (e.g. Product Backlog).</li>
-      <li>Click <b>Copy all titles</b> below and paste it into the box. Each line becomes its own card.</li>
-      <li>Open a card, then use that story's <b>Copy description</b> and <b>Copy checklist</b> buttons below. Paste the description into the card's description box. For the checklist, add a checklist and paste. Trello offers to add each line as an item.</li>
-      <li>In Trello, add the label (Must/Should…) and put yourself or a teammate on the card.</li>
-    </ol>
-    <label>Sprint Review date <small>shown as the due date in each description</small></label>
-    <input type="date" id="review" value="${esc(S.review)}">
-    <div class="big"><button class="btn p" data-copy="${esc(titles).replace(/\n/g,'&#10;')}">Copy all titles</button></div>
-    <pre>${esc(titles)}</pre>
+      <li>Click <b>Copy all titles</b> and paste it into the box. Each line becomes its own card.</li>
+      <li>Open a card, then use that story's <b>Copy description</b> and <b>Copy checklist</b> below. Paste the description into the card. For the checklist, add a checklist and paste. Trello offers to add each line as an item.</li>
+      <li>In Trello, add the label and put yourself or a teammate on the card.</li>
+    </ol></div>
+    <div style="min-width:240px"><label style="margin-top:0">Sprint Review date <small>shown as the due date in each description</small></label>
+      <input type="date" id="review" value="${esc(S.review)}">
+      <div class="big"><button class="btn p" data-copy="${esc(titles).replace(/\n/g,'&#10;')}">Copy all titles (${S.stories.length})</button></div></div>
   </div>
-  ${S.stories.map((s,i)=>`<div class="panel"><h2>${esc(cardTitle(s))}</h2>
-    <div class="big" style="margin:0"><button class="btn" data-cd="${i}">Copy description</button>
-    <button class="btn" data-ct="${i}" ${cardTasks(s)?'':'disabled'}>Copy checklist</button></div>
-    <pre>${esc(cardDesc(s))}</pre></div>`).join('')}`;
+  <div class="wide copy-layout">
+    <div class="panel"><h2>Your stories (${S.stories.length})</h2>
+      <div class="tblwrap"><table><tr><th>Card</th><th class="num">Pts</th><th></th></tr>
+      ${S.stories.map((st,i)=>`<tr data-sel="${i}" class="${i===copySel?'sel':''}"><td><b>${esc(st.id)}</b> ${esc(st.title)}</td><td class="num">${esc(st.points||'')}</td>
+        <td class="act"><button class="btn" data-cd="${i}">Copy description</button> <button class="btn" data-ct="${i}" ${cardTasks(st)?'':'disabled'}>Copy checklist</button></td></tr>`).join('')}
+      </table></div></div>
+    <div class="panel sticky" id="copy-prev">${copyPreview(copySel)}</div>
+  </div>`;
 }
 
 /* ---------- Trello API push ---------- */
@@ -431,7 +770,6 @@ async function initSecure(){
   }catch(e){secureOK=false;TB.msg='⚠ Could not use Windows Credential Manager ('+e+'); the key stays in app storage.';render()}
 }
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const LABEL_FOR={Must:['Must have','red'],Should:['Should have','orange'],Could:['Could have','green'],"Won't":["Won't (this time)",'black']};
 
 async function tr(method,path,params={}){
   const url='https://api.trello.com/1'+path, auth={key:T.key,token:T.token};
@@ -528,7 +866,8 @@ async function finishChecklist(s,items,fresh){
   let id=s.clId;
   if(!id){
     const have=fresh?[]:await tr('GET',`/cards/${s.cardId}/checklists`,{fields:'name'});
-    id=(have.find(c=>c.name==='Checklist')||await tr('POST','/checklists',{idCard:s.cardId,name:'Checklist'})).id;
+    const cl=cfg().checklistName;
+    id=(have.find(c=>c.name===cl)||await tr('POST','/checklists',{idCard:s.cardId,name:cl})).id;
     s.clId=id;save();
   }
   const names=fresh?[]:(await tr('GET',`/checklists/${id}/checkItems`,{fields:'name'})).map(i=>i.name);
@@ -546,7 +885,7 @@ async function pushAll(){
   const todo=S.stories.filter(s=>!isPushed(s)||s.checkDone===false||T.redo);
   if(!todo.length){TB.result={ok:true,text:'Nothing to push: every story already has a card in Trello.'};const k=log.textContent;render();if($('#log'))$('#log').textContent=k;return}
   TB.busy=true;TB.result=null;go.textContent='Starting…';
-  const dueOf=s=>{const d=s.due||S.review;return d?new Date(d+'T17:00:00').toISOString():undefined};
+  const dueOf=s=>{const d=s.due||S.review;return d?new Date(d+'T'+datesCfg().dueTime+':00').toISOString():undefined};
   let created=0,finished=0,skipped=0,failed=null;
   try{
     // If an earlier push died after Trello made a card but before we heard back, reuse it instead of duplicating it.
@@ -564,9 +903,10 @@ async function pushAll(){
         let card=T.redo?null:onList.get(cardTitle(s)),dest=null;
         if(card)say(`↺ ${s.id}: already on Trello, reusing that card`);
         else{
-          const [lname,color]=LABEL_FOR[s.pri]||LABEL_FOR.Should;
-          let lab=TB.labels.find(l=>l.name===lname);
-          if(!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
+          const pl=priOf(s.pri),lname=pl&&pl.color?pl.name:'',color=pl&&pl.color;   // no colour means: add no label
+          const same=n=>String(n||'').trim().toLowerCase()===lname.toLowerCase();
+          let lab=lname?TB.labels.find(l=>same(l.name)):null;
+          if(lname&&!lab&&T.makeLabels){lab=await tr('POST','/labels',{name:lname,color,idBoard:T.boardId});TB.labels.push(lab);say(`Created label “${lname}”`)}
           dest=listFor(s);
           if(dest.skip){say(dest.chosen?`⏭ ${s.id}: skipped, as you chose`:`⏭ ${s.id}: no list called “${dest.miss}” on this board, so it was not pushed`);skipped++;continue}
           if(dest.make){const nl=await tr('POST','/lists',{name:dest.name,idBoard:T.boardId,pos:'bottom'});TB.lists.push(nl);say(`Created list “${nl.name}”`);dest={id:nl.id,name:nl.name}}
@@ -591,6 +931,7 @@ async function pushAll(){
     :{ok:!(skipped&&!created),text:`Done: ${created} card(s) created`+(finished?`, ${finished} checklist(s) finished`:'')+(skipped?`, ${skipped} skipped`:'')+'.'};
   const keep=log.textContent;render();if($('#log'))$('#log').textContent=keep;
 }
+let pushUi={conn:null,opts:false};
 function pPush(){
   if(!S.stories.length)return`<div class="panel"><p>Add some stories first.</p><button class="btn p" data-p="write">← Write stories</button></div>`;
   const connected=TB.boards.length>0, pending=S.stories.filter(s=>!isPushed(s)).length, unfinished=S.stories.filter(s=>isPushed(s)&&s.checkDone===false).length;
@@ -600,46 +941,63 @@ function pPush(){
   const defList=TB.lists.find(l=>l.id===T.listId)||TB.lists[0]||{name:''};
   const pushedNow=S.stories.filter(s=>s.cardUrl&&isPushed(s)&&!s.done);
   const listOpts=cur=>TB.lists.map(l=>`<option value="${l.id}" ${l.name===cur?'selected':''}>${esc(l.name)}</option>`).join('');
-  const movable=pushedNow.length?`<div style="margin-top:14px"><h3 style="margin:0 0 6px;font-size:1rem">Cards on this board (${pushedNow.length})</h3>
-    <div class="item pick"><div class="grow mute">Move every card below to</div><select id="mv-all" ${TB.busy?'disabled':''}><option value="">Skip (don't move)</option>${listOpts('')}</select><button class="btn" id="mv-all-go" disabled>Move all</button></div>
-    ${pushedNow.map(s=>`<div class="item pick"><div class="grow">✓ <b>${esc(s.id)}</b> ${esc(s.title)} <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">open card</a></div><select data-mv="${S.stories.indexOf(s)}" ${TB.busy?'disabled':''}>${s.cardList&&!TB.lists.some(l=>l.name===s.cardList)?`<option selected>${esc(s.cardList)}</option>`:''}${listOpts(s.cardList)}</select></div>`).join('')}</div>`:'';
-  const picker=toMake.length?'<div style="margin:8px 0 14px">'+toMake.map(s=>{
+  // Where a story that is not on Trello yet will go
+  const pickSel=s=>{
     const d=listFor(s),bad=d.make||d.miss,cur=d.chosen?'__skip__':bad?String(wanted(s)).trim():(wanted(s)?d.name:'');
     const opts=[`<option value="" ${cur===''?'selected':''}>Default list (${esc(defList.name)})</option>`,
       ...TB.lists.map(l=>`<option value="${esc(l.name)}" ${cur===l.name?'selected':''}>${esc(l.name)}</option>`),
       `<option value="__skip__" ${cur==='__skip__'?'selected':''}>Skip this story (don't push)</option>`];
     if(bad)opts.push(`<option value="${esc(cur)}" selected>${esc(cur)} ${d.make?'(new list)':'(not found, will be skipped)'}</option>`);
-    return `<div class="item pick"><div class="grow"><b>${esc(s.id)}</b> ${esc(s.title)}</div><select data-pick="${S.stories.indexOf(s)}" ${TB.busy?'disabled':''}>${opts.join('')}</select></div>`}).join('')+'</div>':'';
+    return `<select data-pick="${S.stories.indexOf(s)}" ${TB.busy?'disabled':''} aria-label="List for ${esc(s.id)}">${opts.join('')}</select>`;
+  };
+  // Where a card that is already on Trello is now, and a way to move it
+  const moveSel=s=>`<select data-mv="${S.stories.indexOf(s)}" ${TB.busy?'disabled':''} aria-label="Move the card for ${esc(s.id)}">${s.cardList&&!TB.lists.some(l=>l.name===s.cardList)?`<option selected>${esc(s.cardList)}</option>`:''}${listOpts(s.cardList)}</select>`;
+  const rows=S.stories.map(s=>{
+    const make=toMake.includes(s),moved=pushedNow.includes(s),d=make?listFor(s):null;
+    const status=make?(d.skip?'<span class="mute">Will be skipped</span>':'Will be created')
+      :moved?`✓ <a href="${esc(s.cardUrl)}" target="_blank" rel="noopener">On Trello</a>`
+      :s.done?'<span class="mute">Done, archived</span>':isPushed(s)?'On Trello':'<span class="mute">Waiting</span>';
+    return `<tr><td><b>${esc(s.id)}</b> ${esc(s.title)}</td><td>${status}${isPushed(s)&&s.checkDone===false?' <small class="mute">(checklist unfinished)</small>':''}</td><td>${make?pickSel(s):''}${make&&moved?'<br>':''}${moved?moveSel(s):''}</td></tr>`;
+  }).join('');
   const where=byList.size?(byList.size===1?` in ${boardName?boardName+' → ':''}${[...byList.keys()][0]}`:` in ${byList.size} lists`):'';
+  const connOpen=!connected||(pushUi.conn===null?false:pushUi.conn);
   return `
-  <div class="panel"><h2>1. Connect to Trello <small class="mute">(once)</small></h2>
-    <ol class="how">
-      <li>Open <a href="https://trello.com/power-ups/admin" target="_blank" rel="noopener">trello.com/power-ups/admin</a> → <b>New</b>. Any name, pick your workspace, any https link for the URL. Then open its <b>API key</b> tab, generate a key and copy it.</li>
-      <li>On that page click the <b>Token</b> link, <b>Allow</b>, and copy the token.</li>
-    </ol>
-    <label>API key</label><input id="t-key" type="password" value="${esc(T.key||'')}" autocomplete="off">
-    <label>Token <small>${secureOK?'saved in Windows Credential Manager':'stays in this browser only, so keep it private'}</small></label><input id="t-token" type="password" value="${esc(T.token||'')}" autocomplete="off">
-    <div class="big"><button class="btn p" id="connect">Connect</button><button class="btn link" id="forget">Forget key &amp; token</button></div>
-    <p class="mute">${esc(TB.msg)}</p></div>
-  ${connected?`<div class="panel"><h2>2. Choose where the cards go</h2>
-    <label>Board</label><select id="t-board"><option value="">Choose a board</option>${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
-    ${T.boardId?`<div class="mute" style="margin-top:4px">Board ID: <code>${esc(T.boardId)}</code> <button class="btn link" data-copy="${esc(T.boardId)}" data-msg="Board ID copied. Paste it as the GitHub secret TRELLO_BOARD_ID.">Copy</button> for the GitHub secret TRELLO_BOARD_ID</div>`:''}
-    ${TB.lists.length?`<label>Default list</label><select id="t-list">${TB.lists.map(l=>`<option value="${l.id}" ${T.listId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>`:''}</div>`:''}
-  ${connected&&TB.lists.length?`<div class="panel"><h2>3. Card options</h2>
-    <p class="mute" style="margin-top:0">A story can choose its own list with a <code>list:</code> line or the Trello list box. Stories without one use the list from step 2.</p>
-    <label>Default person <small>added to cards whose story has no owner (or an owner that isn't on the board)</small></label>
-    <select id="t-member"><option value="">Nobody</option>${TB.members.map(m=>`<option value="${m.id}" ${T.memberId===m.id?'selected':''}>${esc(m.fullName||m.username)}</option>`).join('')}</select>
-    <label style="font-weight:400"><input type="checkbox" id="t-mk" ${T.makeLabels?'checked':''} style="width:auto"> Create the Must / Should / Could labels if the board doesn't have them</label>
-    <label>If a story names a list the board doesn't have</label>
-    <select id="t-ml">${[['skip','Skip that story (default)'],['create','Create the list'],['default','Put the card in the default list']].map(([v,l])=>`<option value="${v}" ${(T.missing||(T.makeLists?'create':'skip'))===v?'selected':''}>${l}</option>`).join('')}</select>
-    <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label></div>`:''}
-  ${connected&&TB.lists.length?`<div class="panel"><h2>4. Push</h2>
-    <p>${pending} of ${S.stories.length} stories not on this board yet. Each becomes a card with its description, due date, priority label and checklist.${skipN?` <b>${skipN} will be skipped (no list on this board, or you chose to skip).</b>`:''}${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
-    ${picker}
-    <div class="big"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s)${where||' in Trello'}`:([ready&&`create ${ready} card(s)${where}`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
+  <div class="panel wide">
+    <h2>${connected?'Trello':'Connect to Trello'}</h2>
+    ${connected?`<div class="item pick" style="border:0;padding:0 0 8px;gap:12px;align-items:flex-end">
+        <div class="banner ok" style="margin:0;padding:6px 10px">✓ Connected</div>
+        <div style="flex:1 1 220px"><label style="margin:0">Board</label><select id="t-board"><option value="">Choose a board</option>${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select></div>
+        ${TB.lists.length?`<div style="flex:1 1 220px"><label style="margin:0">Default list</label><select id="t-list">${TB.lists.map(l=>`<option value="${l.id}" ${T.listId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select></div>`:''}
+      </div>
+      ${T.boardId?`<div class="mute" style="margin:0 0 8px">Board ID: <code>${esc(T.boardId)}</code> <button class="btn link" data-copy="${esc(T.boardId)}" data-msg="Board ID copied. Paste it as the GitHub secret TRELLO_BOARD_ID.">Copy</button> for the GitHub secret TRELLO_BOARD_ID</div>`:''}`:''}
+    <details id="conn-d" ${connOpen?'open':''}><summary style="cursor:pointer;font-weight:600">${connected?'Trello key and token':'Key and token (once)'}</summary>
+      <ol class="how" style="margin-top:8px">
+        <li>Open <a href="https://trello.com/power-ups/admin" target="_blank" rel="noopener">trello.com/power-ups/admin</a> → <b>New</b>. Any name, pick your workspace, any https link for the URL. Then open its <b>API key</b> tab, generate a key and copy it.</li>
+        <li>On that page click the <b>Token</b> link, <b>Allow</b>, and copy the token.</li>
+      </ol>
+      <div class="two"><div><label>API key</label><input id="t-key" type="password" value="${esc(T.key||'')}" autocomplete="off"></div>
+        <div><label>Token <small>${secureOK?'saved in Windows Credential Manager':'stays in this browser only, so keep it private'}</small></label><input id="t-token" type="password" value="${esc(T.token||'')}" autocomplete="off"></div></div>
+      <div class="big"><button class="btn p" id="connect">Connect</button><button class="btn link" id="forget">Forget key &amp; token</button></div>
+    </details>
+    ${TB.msg?`<p class="mute" style="margin:8px 0 0">${esc(TB.msg)}</p>`:''}
+    ${connected&&TB.lists.length?`<details id="opts-d" style="margin-top:10px" ${pushUi.opts?'open':''}><summary style="cursor:pointer;font-weight:600">Card options</summary>
+      <p class="mute" style="margin:8px 0 0">A story can choose its own list with a <code>list:</code> line or the Trello list box. Stories without one use the default list.</p>
+      <div class="two"><div><label>Default person <small>added to cards whose story has no owner (or an owner that isn't on the board)</small></label>
+        <select id="t-member"><option value="">Nobody</option>${TB.members.map(m=>`<option value="${m.id}" ${T.memberId===m.id?'selected':''}>${esc(m.fullName||m.username)}</option>`).join('')}</select></div>
+        <div><label>If a story names a list the board doesn't have</label>
+        <select id="t-ml">${[['skip','Skip that story (default)'],['create','Create the list'],['default','Put the card in the default list']].map(([v,l])=>`<option value="${v}" ${(T.missing||(T.makeLists?'create':'skip'))===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
+      <label style="font-weight:400"><input type="checkbox" id="t-mk" ${T.makeLabels?'checked':''} style="width:auto"> Create the priority labels (${esc(pris().filter(p=>p.color).map(p=>p.name).join(', '))}) if the board doesn't have them</label>
+      <label style="font-weight:400"><input type="checkbox" id="t-redo" ${T.redo?'checked':''} style="width:auto"> Also re-create stories already pushed (makes duplicates)</label>
+    </details>`:''}
+  </div>
+  ${connected&&TB.lists.length?`<div class="panel wide"><h2>Push</h2>
+    <p style="margin-top:0">${pending} of ${S.stories.length} stories not on this board yet. Each becomes a card with its description, due date, priority label and checklist.${skipN?` <b>${skipN} will be skipped (no list on this board, or you chose to skip).</b>`:''}${unfinished?` <b>${unfinished} card(s) from an interrupted push are missing checklist items; pushing again will finish them.</b>`:''}</p>
+    <div class="big" style="margin-top:0"><button class="btn p" id="go" ${TB.busy?'disabled':''}>${T.redo?`Create ${S.stories.length} card(s)${where||' in Trello'}`:([ready&&`create ${ready} card(s)${where}`,unfinished&&`finish ${unfinished} checklist(s)`].filter(Boolean).join(' and ').replace(/^./,c=>c.toUpperCase())||'Nothing to push')}</button></div>
     ${TB.result?`<div class="banner ${TB.result.ok?'ok':'err'}">${esc(TB.result.text)}</div>`:''}<pre id="log" style="min-height:40px"></pre>
-    ${movable}
-    <p class="mute">Later edits here don't update cards already in Trello; edit those in Trello.</p></div>`:''}`;
+    <h3 style="margin:14px 0 6px;font-size:15px">Stories and their lists (${S.stories.length})</h3>
+    ${pushedNow.length?`<div class="item pick" style="border:0;padding-top:0"><div class="grow mute">Move every card that is on Trello to</div><select id="mv-all" ${TB.busy?'disabled':''}><option value="">Skip (don't move)</option>${listOpts('')}</select><button class="btn" id="mv-all-go" disabled>Move all (${pushedNow.length})</button></div>`:''}
+    <div class="tblwrap"><table><tr><th>Story</th><th>Status</th><th>List</th></tr>${rows}</table></div>
+    <p class="mute" style="margin-bottom:0">Later edits here don't update cards already in Trello; edit those in Trello.</p></div>`:''}`;
 }
 
 /* ---------- Review report (reads the live Trello board) ---------- */
@@ -660,7 +1018,8 @@ function analyse(){
   const who=Object.fromEntries(TB.members.map(m=>[m.id,m.fullName||m.username]));
   const ln=Object.fromEntries(TB.lists.map(l=>[l.id,l.name]));
   const idx=Object.fromEntries(TB.lists.map((l,i)=>[l.id,i]));
-  const defScope=TB.lists.filter(l=>!/product backlog|feedback/i.test(l.name)).map(l=>l.id);
+  const rc=reportCfg(),{doneRe,skipRe,fbRe,testRe,wipRe}=reportMatchers();
+  const defScope=TB.lists.filter(l=>!skipRe.test(l.name)&&!fbRe.test(l.name)).map(l=>l.id);   // client feedback lists are never part of the sprint by default
   // The lists that count as this sprint are remembered per board. The older single setting (T.rl) is used only for ids that exist
   // on this board, and an empty result falls back to the default so the report is never silently blank.
   const saved=((T.rlBy&&T.rlBy[T.boardId])||T.rl||[]).filter(id=>ln[id]);
@@ -669,33 +1028,33 @@ function analyse(){
   const all=R.cards.map(c=>{
     const items=(c.checklists||[]).flatMap(k=>k.checkItems);
     const pm=c.name.match(/\[(\d+)\]\s*$/);
-    return{...c,list:ln[c.idList]||'?',code:(c.name.match(/^US-\d+/i)||[c.name.slice(0,24)])[0],
-      pts:pm?+pm[1]:0,done:/\bdone\b/i.test(ln[c.idList]||''),owners:c.idMembers.map(id=>who[id]||'?'),
+    return{...c,list:ln[c.idList]||'?',code:(c.name.match(/^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)*-\d+/)||[c.name.slice(0,24)])[0],
+      pts:pm?+pm[1]:0,done:doneRe.test(ln[c.idList]||''),owners:c.idMembers.map(id=>who[id]||'?'),
       ci:{done:items.filter(i=>i.state==='complete').length,total:items.length},
       stale:Math.floor((now-new Date(c.dateLastActivity))/864e5)};
   });
   const cards=all.filter(c=>scope.includes(c.idList)).sort((a,b)=>idx[a.idList]-idx[b.idList]);
   const doneC=cards.filter(c=>c.done),open=cards.filter(c=>!c.done);
   const sum=a=>a.reduce((t,c)=>t+c.pts,0);
-  const byList=TB.lists.filter(l=>scope.includes(l.id)).map(l=>{const cs=cards.filter(c=>c.idList===l.id);return{name:l.name,n:cs.length,pts:sum(cs),max:(l.name.match(/max\s*(\d+)/i)||[])[1]}});
+  const byList=TB.lists.filter(l=>scope.includes(l.id)).map(l=>{const cs=cards.filter(c=>c.idList===l.id);return{name:l.name,n:cs.length,pts:sum(cs),max:wipRe?(l.name.match(wipRe)||[])[1]:undefined}});
   const owners={};
   cards.forEach(c=>(c.owners.length?c.owners:['Unassigned']).forEach(o=>{const r=owners[o]||(owners[o]={n:0,dn:0,p:0,dp:0});r.n++;r.p+=c.pts;if(c.done){r.dn++;r.dp+=c.pts}}));
   const flags=[];
   byList.forEach(l=>{if(l.max&&l.n>+l.max)flags.push(`${l.name}: ${l.n} cards, over the limit of ${l.max}`)});
   open.forEach(c=>{
-    if(!c.owners.length)flags.push(`${c.code} has no owner`);
-    if(/\btest(ing)?\b|\bqa\b/i.test(c.list)&&c.ci.total&&c.ci.done<c.ci.total)flags.push(`${c.code} is in ${c.list} but its checklist is ${c.ci.done}/${c.ci.total}`);
-    if(!c.ci.total)flags.push(`${c.code} has no checklist`);
-    if(c.stale>7)flags.push(`${c.code} untouched for ${c.stale} days`);
+    if(rc.checks.owner&&!c.owners.length)flags.push(`${c.code} has no owner`);
+    if(rc.checks.testing&&testRe.test(c.list)&&c.ci.total&&c.ci.done<c.ci.total)flags.push(`${c.code} is in ${c.list} but its checklist is ${c.ci.done}/${c.ci.total}`);
+    if(rc.checks.checklist&&!c.ci.total)flags.push(`${c.code} has no checklist`);
+    if(rc.checks.stale&&c.stale>rc.staleDays)flags.push(`${c.code} untouched for ${c.stale} days`);
   });
-  doneC.forEach(c=>{if(c.ci.total&&c.ci.done<c.ci.total)flags.push(`${c.code} is in Done but its checklist is ${c.ci.done}/${c.ci.total}`)});
-  const dl=TB.lists.find(l=>/\bdone\b/i.test(l.name)),n=dl&&(dl.name.match(/\d+/)||[])[0];
-  return{n,scope,cards,doneC,open,tp:sum(cards),dp:sum(doneC),byList,owners,flags,feedback:all.filter(c=>/feedback/i.test(c.list))};
+  if(rc.checks.done)doneC.forEach(c=>{if(c.ci.total&&c.ci.done<c.ci.total)flags.push(`${c.code} is in Done but its checklist is ${c.ci.done}/${c.ci.total}`)});
+  const dl=TB.lists.find(l=>doneRe.test(l.name)),n=dl&&(dl.name.match(/\d+/)||[])[0];
+  return{n,scope,cards,doneC,open,tp:sum(cards),dp:sum(doneC),byList,owners,flags,feedback:all.filter(c=>fbRe.test(c.list))};
 }
 const cardLine=c=>`${c.name}${c.owners.length?' ('+c.owners.join(', ')+')':''}`;
 function mdReport(a){
   const pct=a.tp?Math.round(a.dp/a.tp*100):0;
-  const L=[`## Sprint ${a.n||''} review: ${R.board}`.replace('  ',' '),`Generated ${R.at.toLocaleString('en-GB')}`,'',
+  const L=[`## Sprint ${a.n||''} review: ${R.board}`.replace('  ',' '),`Generated ${stampLong(R.at)}`,'',
    `**Result:** ${a.dp} of ${a.tp} points done (${pct}%) · ${a.doneC.length} of ${a.cards.length} cards in Done`,'',
    '### By list','| List | Cards | Points |','|---|---|---|',...a.byList.map(l=>`| ${l.name} | ${l.n} | ${l.pts} |`),'',
    '### By owner','| Owner | Cards done / total | Points done / total |','|---|---|---|',...Object.entries(a.owners).map(([o,r])=>`| ${o} | ${r.dn} / ${r.n} | ${r.dp} / ${r.p} |`),'',
@@ -725,12 +1084,24 @@ async function closeSprint(){
   R.msg=`Closed: ${arch} archived, ${moved} moved`+(failed?`, ${failed} failed`:'')+'.';
   render();
 }
+function reportRules(){
+  const r=reportCfg(),ck=(k,t)=>`<label style="font-weight:400;margin:4px 0 0"><input type="checkbox" style="width:auto" data-rk="${k}" ${r.checks[k]?'checked':''}> ${t}</label>`;
+  const f=(k,l,h)=>`<div><label>${l} <small>${h}</small></label><input data-rw="${k}" value="${esc(r[k])}" autocomplete="off"></div>`;
+  return `<div class="panel" id="rr"><h2>Report rules</h2>
+    <p class="mute">How the report reads your board. Words are separated by commas, and a list matches when its name contains one of them as a whole word, in any capitals.</p>
+    <div class="two">${f('doneWords','Done lists','cards in these lists count as done')}${f('skipWords','Not part of the sprint','left out until you choose lists yourself; feedback lists are too')}</div>
+    <div class="two">${f('feedbackWords','Client feedback lists','shown in their own table')}${f('testWords','Testing lists','a card here needs its checklist finished')}</div>
+    <div class="two">${f('wipWord','Limit word','“Doing (max 3)” has a limit of 3; leave empty to ignore limits')}<div><label>Untouched after <small>days</small></label><input type="number" min="1" max="365" id="rr-stale" value="${r.staleDays}"></div></div>
+    <label>Problems to look for</label>
+    ${ck('owner','A card has no owner')}${ck('checklist','A card has no checklist')}${ck('testing','A card in Testing has an unfinished checklist')}${ck('done','A card in Done has an unfinished checklist')}${ck('stale','A card has not been touched for a while')}
+    <div class="big"><button class="btn link" id="rr-reset">Reset the report rules to the default</button></div></div>`;
+}
 function pReport(){
   const head=`<div class="panel wide head"><div><h2>Sprint review report</h2>
     <p class="mute" style="margin:0">Reads your Trello board and summarises the sprint for the Review. Move cards to the Done list first, as the client accepts them.</p></div>
-    <div class="headbtn">${TB.boards.length?`<select id="rep-board" style="width:auto;min-width:170px" ${R.busy?'disabled':''} title="The board the report reads. The Push step uses the same board.">${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>`:''}<span class="mute">${esc(R.msg)}${R.at&&!R.msg?'Loaded '+R.at.toLocaleTimeString('en-GB'):''}</span>
+    <div class="headbtn">${TB.boards.length?`<select id="rep-board" style="width:auto;min-width:170px" ${R.busy?'disabled':''} title="The board the report reads. The Push step uses the same board.">${TB.boards.map(b=>`<option value="${b.id}" ${T.boardId===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>`:''}<span class="mute">${esc(R.msg)}${R.at&&!R.msg?'Loaded '+stampTime(R.at):''}</span>
     <button class="btn p ${R.busy?'busy':''}" id="rep-load" ${R.busy?'disabled':''}>${R.busy?'Loading…':R.cards?'Refresh from Trello':'Load from Trello'}</button></div></div>`;
-  if(!R.cards)return head;
+  if(!R.cards)return head+reportLink();
   const a=analyse(),pct=a.tp?Math.round(a.dp/a.tp*100):0,md=mdReport(a);
   const tbl=(h,rows,num=[])=>`<table><tr>${h.map((x,i)=>`<th${num.includes(i)?' class="num"':''}>${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((x,i)=>`<td${num.includes(i)?' class="num"':''}>${esc(x)}</td>`).join('')}</tr>`).join('')}</table>`;
   return head+`
@@ -749,34 +1120,67 @@ function pReport(){
   <div class="panel"><h2>By owner</h2>${tbl(['Owner','Cards done','Points done'],Object.entries(a.owners).map(([o,r])=>[o,`${r.dn} / ${r.n}`,`${r.dp} / ${r.p}`]),[1,2])}
     <p class="mute" style="margin:8px 0 0">A card with two owners counts for each of them.</p></div>
   </div>
-  <div class="panel wide"><h2>Carry over to the next sprint (${a.open.length})</h2>${a.open.length?tbl(['Card','List','Owner','Checklist'],a.open.map(c=>[c.name,c.list,c.owners.join(', ')||'-',c.ci.total?`${c.ci.done}/${c.ci.total}`:'-']),[3]):'<p class="mute">Nothing. Everything is done.</p>'}</div>
+  <div class="panel wide"><h2>Carry over to the next sprint (${a.open.length})</h2>${a.open.length?'<div class="tblwrap">'+tbl(['Card','List','Owner','Checklist'],a.open.map(c=>[c.name,c.list,c.owners.join(', ')||'-',c.ci.total?`${c.ci.done}/${c.ci.total}`:'-']),[3])+'</div>':'<p class="mute">Nothing. Everything is done.</p>'}</div>
   <div class="wide ${a.feedback.length?'cols2':''}">
   <div class="panel"><h2>Needs attention (${a.flags.length})</h2>${a.flags.length?'<ul style="margin:0;padding-left:20px">'+a.flags.map(f=>`<li>${esc(f)}</li>`).join('')+'</ul>':'<p class="mute">No problems found.</p>'}</div>
   ${a.feedback.length?`<div class="panel"><h2>Client feedback (${a.feedback.length})</h2><ul style="margin:0;padding-left:20px">${a.feedback.map(c=>`<li>${esc(c.name)}</li>`).join('')}</ul></div>`:''}
   </div>
-  <div class="panel wide"><h2>Close the sprint</h2>
+  <div class="wide cols2">
+  <div class="panel"><h2>Close the sprint</h2>
     <p class="mute" style="margin-top:0">Archives the ${a.doneC.length} card(s) in Done (restore them from the archive in Trello) and can move the ${a.open.length} unfinished card(s) to the list you choose. Copy the report first if you need it.</p>
     <label>Unfinished cards</label><select id="sc-list"><option value="">Leave them where they are</option>${TB.lists.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select>
     <div class="big"><button class="btn" id="sc-go" ${R.busy||(!a.doneC.length&&!a.open.length)?'disabled':''}>Close the sprint</button></div></div>
-  <div class="panel wide"><h2>Copy for your Review card or report</h2>
+  <div class="panel"><h2>Copy for your Review card or report</h2>
     <div class="big" style="margin:0"><button class="btn p" data-copy="${esc(md).replace(/\n/g,'&#10;')}">Copy as text</button><button class="btn" id="rep-dl">Download .md</button></div>
-    <pre>${esc(md)}</pre></div>`;
+    <pre>${esc(md)}</pre></div>
+  </div>${reportLink()}`;
 }
 
-function pSetup(){
-  const lists=['Product Backlog','Sprint Backlog','Doing (max 3)','In Review (max 4)','Testing / QA','Done · Sprint 1','Client Feedback'].join('\n');
-  const labels=['Must have','Should have','Could have',"Won't (this time)",'Feature','Bug','Docs / Report','AI feature','Blocked'].join('\n');
-  const dod=['Acceptance criteria shown to the PO','Code reviewed by 1 teammate','CI passes','Tests pass','Card ID in branch, commits and PR title'].join('\n');
-  const blk=(t,h,x)=>`<div class="panel"><h2>${t}</h2><p class="mute" style="margin-top:0">${h}</p><div class="big" style="margin:0"><button class="btn p" data-copy="${esc(x).replace(/\n/g,'&#10;')}">Copy</button></div><pre>${esc(x)}</pre></div>`;
-  return `<button class="btn link" data-p="write">← Back</button>
-  <p class="sub">Do this once per project. You only need it for a brand-new board.</p>
-  ${blk('1. Board lists','Make a new board, click “Add another list”, and paste. Each line becomes a list.',lists)}
-  ${blk('2. Labels','Board menu → Labels → Create a label. Make one per line (name them, not just a colour).',labels)}
-  ${blk('3. Definition of Done','Put this checklist on a card and make it a template to copy into every story.',dod)}`;
+// What the Review report makes of each list name, so a team can see before they build the board.
+function listReadout(text){
+  const m=reportMatchers(),names=lines(text);
+  const rows=names.map(n=>{
+    const t=[];
+    if(m.doneRe.test(n))t.push('Done');
+    if(m.fbRe.test(n))t.push('client feedback');
+    else if(m.skipRe.test(n))t.push('not part of the sprint');
+    if(m.testRe.test(n))t.push('testing');
+    const w=m.wipRe&&n.match(m.wipRe);if(w)t.push('limit '+w[1]);
+    return t.length?`<li><b>${esc(n)}</b>: ${t.join(', ')}</li>`:'';
+  }).filter(Boolean).join('');
+  const warn=names.length&&!names.some(n=>m.doneRe.test(n))?`<p class="banner err" style="margin:8px 0 0">No list matches the Done words (${esc(reportCfg().doneWords||'none set')}), so the report would count nothing as done. Change the list or the Done words in the report rules.</p>`:'';
+  return(rows?`<p class="mute" style="margin:8px 0 0">How the Review report reads these lists:</p><ul class="mute" style="margin:4px 0 0;padding-left:20px">${rows}</ul>`:'')+warn;
+}
+function boardSection(){
+  const c=setupCfg(),prio=pris().filter(p=>p.color).map(p=>p.name);
+  const box=(k,rows)=>`<textarea data-setup="${k}" rows="${rows}" spellcheck="false" style="font-family:ui-monospace,Consolas,monospace;font-size:13px" aria-label="${k}">${esc(c[k])}</textarea>`;
+  const bar=(k)=>`<div class="big"><button class="btn p" data-setupcopy="${k}">Copy</button><button class="btn link" data-setupreset="${k}">Reset to the default</button></div>`;
+  return `<p class="mute" style="margin:0">Do this once per project. You only need it for a brand-new board. Edit the text to fit your team, then copy it into Trello. Your changes are kept.</p>
+  <div class="panel"><h2>1. Board lists</h2><p class="mute" style="margin-top:0">Make a new board, click “Add another list”, and paste. Each line becomes a list.</p>
+    ${box('lists',Math.max(5,lines(c.lists).length+1))}${bar('lists')}<div id="lists-read">${listReadout(c.lists)}</div></div>
+  <div class="panel"><h2>2. Labels</h2><p class="mute" style="margin-top:0">Board menu → Labels → Create a label. Make one per line (name them, not just a colour).</p>
+    <p class="mute" style="margin:0 0 6px">${prio.length?`From your priorities: <b>${esc(prio.join(', '))}</b>. <button class="btn link" data-gos="priorities">Change them in Priorities and labels</button>`:'Your priorities add no labels (their colour is set to No label).'}</p>
+    <label style="margin-top:0">Other labels</label>${box('labels',Math.max(4,lines(c.labels).length+1))}${bar('labels')}</div>
+  <div class="panel"><h2>3. Definition of Done</h2><p class="mute" style="margin-top:0">Put this checklist on a card and make it a template to copy into every story.</p>
+    ${box('dod',Math.max(4,lines(c.dod).length+1))}${bar('dod')}</div>`;
 }
 
 /* ---------- events ---------- */
 function bind(){
+  ['conn','opts'].forEach(k=>{const sm=$(`#${k}-d > summary`);if(sm)sm.onclick=()=>setTimeout(()=>{pushUi[k]=$(`#${k}-d`).open})});
+  document.querySelectorAll('[data-sel]').forEach(r=>r.onclick=()=>{
+    copySel=+r.dataset.sel;
+    document.querySelectorAll('[data-sel]').forEach(x=>x.classList.toggle('sel',x===r));
+    $('#copy-prev').innerHTML=copyPreview(copySel);
+  });
+  document.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{settingsTab=b.dataset.st;render();scrollTo(0,0)});
+  document.querySelectorAll('[data-gos]').forEach(b=>b.onclick=()=>{settingsTab=b.dataset.gos;page='settings';render();scrollTo(0,0)});
+  // The two tabs of the right-hand panel on Step 1 switch without redrawing, so nothing typed is lost.
+  document.querySelectorAll('[data-wt]').forEach(b=>b.onclick=()=>{
+    writeTab=b.dataset.wt;
+    document.querySelectorAll('[data-wt]').forEach(x=>x.classList.toggle('on',x===b));
+    $('#wt-stories').hidden=writeTab!=='stories';$('#wt-bulk').hidden=writeTab!=='bulk';
+  });
   document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>goPage(b.dataset.p));
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy,b,b.dataset.msg));
   document.querySelectorAll('[data-cd]').forEach(b=>b.onclick=()=>copy(cardDesc(S.stories[+b.dataset.cd]),b));
@@ -798,6 +1202,33 @@ function bind(){
   if($('#go'))$('#go').onclick=pushAll;
   document.querySelectorAll('[data-mv]').forEach(s=>s.onchange=()=>moveCards([S.stories[+s.dataset.mv]],s.value));
   if($('#mv-all-go')){$('#mv-all').onchange=e=>{$('#mv-all-go').disabled=!e.target.value||TB.busy};$('#mv-all-go').onclick=()=>{const v=$('#mv-all').value;if(v)moveCards(S.stories.filter(x=>x.cardUrl&&isPushed(x)&&!x.done),v)}}
+  if(page==='settings'&&settingsTab==='board'){
+    const save1=(k,v)=>{const next={...(S.settings||{})},o={...(next.setup||{})};if(v===SETUP_DEFAULTS[k])delete o[k];else o[k]=v;if(Object.keys(o).length)next.setup=o;else delete next.setup;S.settings=next;save()};
+    // Saving does not redraw the page, so a click on Copy right after typing is not lost.
+    document.querySelectorAll('[data-setup]').forEach(t=>{
+      t.onchange=()=>save1(t.dataset.setup,t.value.replace(/\s+$/,''));
+      t.oninput=()=>{if(t.dataset.setup==='lists')$('#lists-read').innerHTML=listReadout(t.value)};
+    });
+    document.querySelectorAll('[data-setupcopy]').forEach(b=>b.onclick=()=>{
+      const k=b.dataset.setupcopy,txt=(k==='labels'?[...pris().filter(p=>p.color).map(p=>p.name),...lines($('[data-setup="labels"]').value)]:lines($(`[data-setup="${k}"]`).value)).join('\n');
+      copy(txt,b);
+    });
+    document.querySelectorAll('[data-setupreset]').forEach(b=>b.onclick=()=>{save1(b.dataset.setupreset,SETUP_DEFAULTS[b.dataset.setupreset]);render()});
+  }
+  if($('#rr')){
+    const store=fn=>{
+      const r=reportCfg();fn(r);const o={};
+      for(const k of ['doneWords','skipWords','feedbackWords','testWords','wipWord'])if(r[k]!==REPORT_DEFAULTS[k])o[k]=r[k];
+      if(r.staleDays!==REPORT_DEFAULTS.staleDays)o.staleDays=r.staleDays;
+      const c={};for(const k of Object.keys(REPORT_DEFAULTS.checks))if(!r.checks[k])c[k]=false;if(Object.keys(c).length)o.checks=c;
+      const next={...(S.settings||{})};if(Object.keys(o).length)next.report=o;else delete next.report;
+      S.settings=next;save();render();
+    };
+    document.querySelectorAll('[data-rw]').forEach(el=>el.onchange=()=>store(r=>{r[el.dataset.rw]=el.value.slice(0,200)}));
+    document.querySelectorAll('[data-rk]').forEach(el=>el.onchange=()=>store(r=>{r.checks[el.dataset.rk]=el.checked}));
+    $('#rr-stale').onchange=e=>{const v=Math.round(+e.target.value);if(!(v>=1&&v<=365)){toast('Enter a number of days from 1 to 365');e.target.value=reportCfg().staleDays;return}store(r=>{r.staleDays=v})};
+    $('#rr-reset').onclick=()=>{const next={...(S.settings||{})};delete next.report;S.settings=next;save();render()};
+  }
   if($('#rep-load'))$('#rep-load').onclick=loadReport;
   // Switching board here is the same as choosing it in the Push step: one current board for the whole app.
   if($('#rep-board'))$('#rep-board').onchange=async e=>{
@@ -817,22 +1248,166 @@ function bind(){
     const have=new Set(S.stories.map(x=>x.title.trim().toLowerCase()));
     const fresh=stories.filter(s=>{const k=s.title.trim().toLowerCase();if(have.has(k))return false;have.add(k);return true});
     const dupes=stories.length-fresh.length;
-    fresh.forEach(s=>{S.stories.push({id:nextId(),...s})});
-    save();render();
-    toast(`Imported ${fresh.length} stor${fresh.length===1?'y':'ies'}`+(dupes?`, ${dupes} skipped (title already in your list)`:'')+(skipped?`, ${skipped} line${skipped===1?'':'s'} not understood`:''));
+    let idClash=0;
+    fresh.forEach(s=>{
+      let id=s.id;
+      if(id&&idTaken(id,-1)){idClash++;id=''}   // an ID that is already used: number it automatically instead
+      S.stories.push({...s,id:id||nextId()});
+    });
+    writeTab='stories';save();render();
+    toast(`Imported ${fresh.length} stor${fresh.length===1?'y':'ies'}`+(dupes?`, ${dupes} skipped (title already in your list)`:'')+(idClash?`, ${idClash} given a new ID (the one in the text was already used)`:'')+(skipped?`, ${skipped} line${skipped===1?'':'s'} not understood`:''));
   };
   if($('#exp')){$('#exp').onclick=()=>saveFile('sprint-stories.json',JSON.stringify(S,null,2),'application/json','Stories saved.');$('#imp').onchange=importStories}
   if($('#exp-fmt')){$('#exp-fmt').onchange=e=>{expFmt=e.target.value};$('#exp-dl').onclick=()=>exportStories(expFmt,false);$('#exp-copy').onclick=()=>exportStories(expFmt,true)}
-  if($('#tpl'))$('#tpl').onclick=e=>copy(TEMPLATE_TEXT,e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
+  if($('#set-prefix')){
+    const apply=()=>{
+      const p=cleanPrefix($('#set-prefix').value)||ID_DEFAULTS.idPrefix;
+      S.settings={...(S.settings||{}),idPrefix:p,idPad:+$('#set-pad').value};save();keepForm(render);
+    };
+    $('#set-prefix').onchange=apply;$('#set-pad').onchange=apply;
+  }
+  if($('#pri-add')){
+    const edit=fn=>{S.settings={...(S.settings||{}),priorities:pris().map(p=>({...p}))};fn(S.settings);save();keepForm(render)};
+    document.querySelectorAll('[data-pname]').forEach(el=>el.onchange=()=>{
+      const i=+el.dataset.pname,v=el.value.trim(),old=pris()[i].name;
+      if(!v||pris().some((p,j)=>j!==i&&p.name.toLowerCase()===v.toLowerCase())){toast(v?`“${v}” is already a priority`:'A priority needs a name');el.value=old;return}
+      edit(st=>{st.priorities[i].name=v});
+    });
+    document.querySelectorAll('[data-pcolor]').forEach(el=>el.onchange=()=>edit(st=>{st.priorities[+el.dataset.pcolor].color=el.value}));
+    document.querySelectorAll('[data-pup]').forEach(b=>b.onclick=()=>{const i=+b.dataset.pup;edit(st=>{[st.priorities[i-1],st.priorities[i]]=[st.priorities[i],st.priorities[i-1]]})});
+    document.querySelectorAll('[data-pdown]').forEach(b=>b.onclick=()=>{const i=+b.dataset.pdown;edit(st=>{[st.priorities[i+1],st.priorities[i]]=[st.priorities[i],st.priorities[i+1]]})});
+    $('#pri-add').onclick=()=>edit(st=>{
+      let n='New priority',k=2;while(st.priorities.some(p=>p.name.toLowerCase()===n.toLowerCase()||p.key.toLowerCase()===n.toLowerCase()))n='New priority '+k++;
+      st.priorities.push({key:n,name:n,color:'blue'});
+    });
+    document.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=async()=>{
+      const i=+b.dataset.pdel,p=pris()[i],used=S.stories.filter(x=>x.pri===p.key);
+      const rest=pris().filter((_,j)=>j!==i),fallback=(rest.find(r=>r.key===(S.settings&&S.settings.priDefault))||rest[Math.min(i,rest.length-1)]);
+      if(used.length&&!await ask(`Delete “${p.name}”?`,`${used.length} stor${used.length===1?'y uses':'ies use'} it. ${used.length===1?'It':'They'} will change to “${fallback.name}”. Cards already on Trello are not touched.`,{ok:'Delete',danger:true}))return;
+      edit(st=>{used.forEach(x=>{x.pri=fallback.key});st.priorities.splice(i,1);if(st.priDefault===p.key)delete st.priDefault});
+    });
+    $('#pri-reset').onclick=async()=>{
+      const lost=S.stories.filter(x=>!DEFAULT_PRIS.some(p=>p.key===x.pri));
+      if(!await ask('Reset the priorities?',lost.length?`${lost.length} stor${lost.length===1?'y uses':'ies use'} a priority that is not in the default four. ${lost.length===1?'It':'They'} will change to “${DEFAULT_PRIS[1].name}”.`:"The list goes back to Must have, Should have, Could have and Won't.",{ok:'Reset',danger:true}))return;
+      edit(st=>{lost.forEach(x=>{x.pri=DEFAULT_PRIS[1].key});st.priorities=DEFAULT_PRIS.map(p=>({...p}));delete st.priDefault});
+    };
+    $('#pri-def').onchange=e=>edit(st=>{if(e.target.value)st.priDefault=e.target.value;else delete st.priDefault});
+  }
+  if($('#cf-add')){
+    // Saves a change to the fields. Only what differs from the default is stored.
+    const edit=fn=>{
+      const st={...(S.settings||{})};st.customFields=customFields().map(c=>({...c,...(c.options?{options:[...c.options]}:{})}));st.fields={...(st.fields||{})};
+      fn(st);
+      for(const k of Object.keys(st.fields))if(!Object.keys(st.fields[k]).length)delete st.fields[k];
+      if(!Object.keys(st.fields).length)delete st.fields;
+      if(!st.customFields.length)delete st.customFields;
+      S.settings=st;save();keepForm(render);
+    };
+    const patchField=(st,k,fn)=>{const o={...(st.fields[k]||{})};fn(o);st.fields[k]=o};
+    document.querySelectorAll('[data-fshow]').forEach(el=>el.onchange=()=>edit(st=>patchField(st,el.dataset.fshow,o=>{if(el.checked)delete o.show;else o.show=false})));
+    document.querySelectorAll('[data-flabel]').forEach(el=>el.onchange=()=>edit(st=>patchField(st,el.dataset.flabel,o=>{const v=el.value.trim();if(!v||v===BUILTIN_FIELDS[el.dataset.flabel].label)delete o.label;else o.label=v})));
+    document.querySelectorAll('[data-cflabel]').forEach(el=>el.onchange=()=>{
+      const i=+el.dataset.cflabel,v=el.value.trim(),cur=customFields()[i];
+      if(!v||customFields().some((c,j)=>j!==i&&slug(c.label)===slug(v))){toast(v?`“${v}” is already one of your fields`:'A field needs a name');el.value=cur.label;return}
+      edit(st=>{
+        const c=st.customFields[i];c.label=v;
+        // A field still carrying its automatic name (new_field) gets a key from its real name, unless a card description already uses the old key.
+        const nk=slug(v),mentioned=new RegExp('\\{[#/]?'+c.key+'[|}]').test(cfg().cardDesc);
+        if(/^new_field(_\d+)?$/.test(c.key)&&!mentioned&&/^[a-z][a-z0-9_]{0,30}$/.test(nk)&&!RESERVED_KEYS.has(nk)&&!st.customFields.some((x,j)=>j!==i&&x.key===nk)){
+          S.stories.forEach(x=>{if(x.extra&&c.key in x.extra){x.extra[nk]=x.extra[c.key];delete x.extra[c.key]}});
+          c.key=nk;
+        }
+      });
+    });
+    document.querySelectorAll('[data-cftype]').forEach(el=>el.onchange=()=>edit(st=>{
+      const c=st.customFields[+el.dataset.cftype];c.type=el.value;
+      if(c.type==='choice'){if(!c.options||!c.options.length)c.options=['Option 1','Option 2']}else delete c.options;
+    }));
+    document.querySelectorAll('[data-cfopts]').forEach(el=>el.onchange=()=>{
+      const i=+el.dataset.cfopts,o=[...new Set(el.value.split(',').map(x=>x.trim().slice(0,40)).filter(Boolean))].slice(0,20);
+      if(!o.length){toast('A choice field needs at least one choice');el.value=(customFields()[i].options||[]).join(', ');return}
+      edit(st=>{st.customFields[i].options=o});
+    });
+    document.querySelectorAll('[data-cfup]').forEach(b=>b.onclick=()=>{const i=+b.dataset.cfup;edit(st=>{[st.customFields[i-1],st.customFields[i]]=[st.customFields[i],st.customFields[i-1]]})});
+    document.querySelectorAll('[data-cfdown]').forEach(b=>b.onclick=()=>{const i=+b.dataset.cfdown;edit(st=>{[st.customFields[i+1],st.customFields[i]]=[st.customFields[i],st.customFields[i+1]]})});
+    document.querySelectorAll('[data-cfdel]').forEach(b=>b.onclick=async()=>{
+      const i=+b.dataset.cfdel,c=customFields()[i],used=S.stories.filter(x=>x.extra&&x.extra[c.key]);
+      if(!await ask(`Delete “${c.label}”?`,used.length?`${used.length} stor${used.length===1?'y has':'ies have'} a value in it. The value${used.length===1?' is':'s are'} removed from ${used.length===1?'it':'them'}. Cards already on Trello are not touched.`:'The field is removed.',{ok:'Delete',danger:true}))return;
+      used.forEach(x=>{delete x.extra[c.key];if(!Object.keys(x.extra).length)delete x.extra});
+      edit(st=>{st.customFields.splice(i,1)});
+    });
+    $('#cf-add').onclick=()=>edit(st=>{
+      let key='new_field',n=2;while(RESERVED_KEYS.has(key)||st.customFields.some(c=>c.key===key||slug(c.label)===key))key='new_field_'+n++;
+      st.customFields.push({key,label:key==='new_field'?'New field':'New field '+(n-1),type:'text'});
+    });
+    $('#fields-reset').onclick=async()=>{
+      const have=S.stories.filter(x=>x.extra&&Object.keys(x.extra).length).length;
+      if(!await ask('Reset the story fields?',have?`All built-in fields come back and your own fields are removed, along with their values in ${have} stor${have===1?'y':'ies'}.`:'All built-in fields come back and your own fields are removed.',{ok:'Reset',danger:true}))return;
+      S.stories.forEach(x=>delete x.extra);
+      const next={...(S.settings||{})};delete next.fields;delete next.customFields;S.settings=next;save();keepForm(render);
+    };
+  }
+  if($('#dt-reset')){
+    document.querySelectorAll('[data-dt]').forEach(el=>el.onchange=()=>{
+      const k=el.dataset.dt;let v=el.value;
+      if(k==='dueTime'&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)){toast('Pick a time, like 17:00');el.value=datesCfg().dueTime;return}
+      const d={...datesCfg(),[k]:v},o={};
+      for(const x of Object.keys(DATES_DEFAULTS))if(d[x]!==DATES_DEFAULTS[x])o[x]=d[x];
+      const next={...(S.settings||{})};if(Object.keys(o).length)next.dates=o;else delete next.dates;
+      S.settings=next;save();keepForm(render);
+    });
+    $('#dt-reset').onclick=()=>{const next={...(S.settings||{})};delete next.dates;S.settings=next;save();keepForm(render)};
+  }
+  if($('#card-title')){
+    const sample=()=>S.stories[0]||{id:nextId(),title:'Log in with UNIMAS email',role:'a student',want:'to log in with my email',why:'my data stays private',ac:'Given a valid account, when I log in, then I see Home in 2 seconds\nGiven a wrong password, when I log in, then I see an error',points:'5',pri:defPri('form'),owner:'Aina',tasks:'',list:'',due:''};
+    const prev=()=>{
+      const t=$('#card-title').value,d=$('#card-desc').value,st=sample(),bad=titleProblem(t),unk=unknownFields(t+'\n'+d);
+      $('#card-prev').textContent=renderTitle(t,st)+'\n\n'+renderDesc(d,storyVals(st));
+      const w=$('#card-warn');w.textContent=[bad,unk.length?`Not a known field: ${unk.map(x=>'{'+x+'}').join(', ')}. It will show as typed.`:''].filter(Boolean).join(' ');w.hidden=!w.textContent;
+    };
+    $('#card-title').oninput=prev;$('#card-desc').oninput=prev;prev();
+    const commit=()=>{
+      const t=$('#card-title').value.trim(),bad=titleProblem(t);
+      if(bad){toast(bad);keepForm(render);return}
+      const d=$('#card-desc').value.replace(/\s+$/,''),cl=$('#card-cl').value.trim();
+      const next={...(S.settings||{}),cardTitle:t,cardDesc:d||DEFAULT_DESC,checklistName:cl||CARD_DEFAULTS.checklistName};
+      ['cardTitle','cardDesc','checklistName'].forEach(k=>{if(next[k]===CARD_DEFAULTS[k])delete next[k]});
+      S.settings=next;save();keepForm(render);
+    };
+    $('#card-title').onchange=commit;$('#card-desc').onchange=commit;$('#card-cl').onchange=commit;
+    $('#card-reset').onclick=async()=>{
+      if(!await ask('Reset the card format?','The title, the description and the checklist name go back to the default. Cards already on Trello are not touched.',{ok:'Reset',danger:true}))return;
+      const next={...(S.settings||{})};['cardTitle','cardDesc','checklistName'].forEach(k=>delete next[k]);
+      S.settings=next;save();keepForm(render);
+    };
+  }
+  if($('#tpl'))$('#tpl').onclick=e=>copy(templateText(),e.currentTarget,'Template copied. Give it to your AI assistant with your notes.');
   document.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{const f=$('#f-list');f.value=b.dataset.chip;f.focus()});
   if($('#cancel'))$('#cancel').onclick=()=>{editing=null;render()};
   if($('#save'))$('#save').onclick=async()=>{
-    const v=k=>$('#f-'+k).value.trim();
+    const old=editing!==null?S.stories[editing]:{};
+    // A hidden field has no input on the page: the story keeps what it has.
+    const v=k=>{const e=$('#f-'+k);return e?e.value.trim():String(old[k]??'')};
+    const raw=k=>{const e=$('#f-'+k);return e?e.value:String(old[k]??'')};
     if(!v('title')){toast('Give the story a title');$('#f-title').focus();return}
-    const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:$('#f-ac').value,points:v('points'),pri:v('pri'),tasks:$('#f-tasks').value,owner:v('owner'),list:v('list'),due:v('due')};
+    const d={title:v('title'),role:v('role'),want:v('want'),why:v('why'),ac:raw('ac'),points:v('points'),pri:v('pri'),tasks:raw('tasks'),owner:v('owner'),list:v('list'),due:v('due')};
+    const extra={...(old.extra||{})};
+    for(const c of customFields()){
+      const e=$('#f-x-'+c.key);if(!e)continue;
+      const val=cleanExtra(c,e.value);
+      if(val===null){toast(`“${c.label}” does not fit: ${c.type==='number'?'use a number':c.type==='date'?'use a date':'pick one of the choices'}`);e.focus();return}
+      if(val)extra[c.key]=val;else delete extra[c.key];
+    }
+    if(Object.keys(extra).length||old.extra)d.extra=extra;
+    const own=v('id').toUpperCase(),locked=editing!==null&&!!S.stories[editing].cardId;
+    if(own&&!locked){
+      if(!ID_OK.test(own)){toast('An ID looks like FR-03 or FR-AI-01: letters, then a dash and a number');$('#f-id').focus();return}
+      if(idTaken(own,editing)){toast(`${own} is already used by another story`);$('#f-id').focus();return}
+    }
     const same=S.stories.find((x,i)=>i!==editing&&x.title.trim().toLowerCase()===d.title.toLowerCase());
     if(same&&!await ask('Add it again?',`A story called “${same.title}” already exists as ${same.id}.`,{ok:'Add anyway'}))return;
-    if(editing!==null)Object.assign(S.stories[editing],d);else S.stories.push({id:nextId(),...d});
+    if(editing!==null){Object.assign(S.stories[editing],d);if(own&&!locked)S.stories[editing].id=own}
+    else S.stories.push({...d,id:own||nextId()});
     editing=null;save();render();toast(`Saved “${d.title}”`);scrollTo(0,0);
   };
 }
@@ -884,7 +1459,8 @@ document.addEventListener('click',e=>{
   const a=e.target.closest('a[href^="http"]');
   if(a&&window.__TAURI__&&window.__TAURI__.opener){e.preventDefault();window.__TAURI__.opener.openUrl(a.href)}
 });
-$('#goSetup').onclick=()=>{page='setup';render()};
+$('#goSetup').onclick=()=>{settingsTab='board';page='settings';render();scrollTo(0,0)};
+$('#settingsBtn').onclick=()=>{page='settings';render();scrollTo(0,0)};
 const importStories=e=>{
   const input=e.target,f=input.files[0];
   if(!f)return;
@@ -895,9 +1471,10 @@ const importStories=e=>{
     if(!d||!Array.isArray(d.stories)||d.stories.some(s=>!s||typeof s!=='object'||typeof s.title!=='string'))return bad();
     const n=d.stories.length;
     if(S.stories.length&&!await ask('Replace your stories?',`This loads ${n} stor${n===1?'y':'ies'} from the file and replaces the ${S.stories.length} you have now.`,{ok:'Replace',danger:true}))return;
-    const blank={role:'',want:'',why:'',ac:'',points:'',pri:'Should',tasks:'',owner:'',list:''};
-    S={review:typeof d.review==='string'?d.review:'',stories:[]};
-    d.stories.forEach(s=>S.stories.push({...blank,...s,id:typeof s.id==='string'?s.id:''}));
+    S={review:typeof d.review==='string'?d.review:'',stories:[],settings:cleanSettings(d.settings)};
+    const blank={role:'',want:'',why:'',ac:'',points:'',pri:defPri('bulk'),tasks:'',owner:'',list:''};
+    const goodExtra=e=>{if(!e||typeof e!=='object'||Array.isArray(e))return undefined;const o={};for(const [k,val] of Object.entries(e))if(/^[a-z][a-z0-9_]{0,30}$/.test(k)&&typeof val==='string'&&val.length<=2000)o[k]=val;return Object.keys(o).length?o:undefined};
+    d.stories.forEach(s=>{const one={...blank,...s,id:typeof s.id==='string'?s.id:''},ex=goodExtra(s.extra);if(ex)one.extra=ex;else delete one.extra;S.stories.push(one)});
     S.stories.forEach(s=>{if(!s.id)s.id=nextId()});
     editing=null;save();page='write';render();toast(`Loaded ${n} stor${n===1?'y':'ies'}`);
   }).finally(()=>{input.value=''});

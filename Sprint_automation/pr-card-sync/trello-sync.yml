@@ -28,6 +28,7 @@ jobs:
           TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
           TRELLO_BOARD_ID: ${{ secrets.TRELLO_BOARD_ID }}
           # Optional:
+          # CARD_PREFIX: FR            # your story ID prefix (default US). Several: "FR,US". Sprint Kit shows the value to use
           # MERGE_BASE: develop        # only move to Testing when merged into this branch
           # DRY_RUN: "1"               # log what would happen without changing Trello
           TRELLO_LISTS: ${{ vars.TRELLO_LISTS }}   # optional: map unusual list names, see README
