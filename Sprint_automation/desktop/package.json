@@ -1,7 +1,7 @@
 {
   "name": "sprint-kit-desktop",
   "private": true,
-  "version": "0.4.2",
+  "version": "0.5.0",
   "scripts": {
     "sync": "node sync.js",
     "dev": "npm run sync && tauri dev",
