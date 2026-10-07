@@ -21,12 +21,21 @@ The card is found from the ID (`US-07`) in the **branch name or the PR title**, 
 
 ## Set up (once, in your team's code repo)
 
+**Option A: use the action (recommended, nothing to copy)**
+
+1. Copy `trello-sync.action.example.yml` to `.github/workflows/trello-sync.yml` in your code repo. It calls `Boci0/sprint-kit/Sprint_automation/pr-card-sync@main`.
+2. Do steps 2 to 4 below.
+
+**Option B: copy the script**
+
 1. Copy `trello-sync.mjs` to `.github/trello-sync/trello-sync.mjs` and `trello-sync.yml` to `.github/workflows/trello-sync.yml`.
 2. In the workflow, change `workflows: ["CI"]` to the exact `name:` of your CI workflow. If you have none, delete the `workflow_run` block.
 3. In the repo go to **Settings → Secrets and variables → Actions** and add three secrets:
    - `TRELLO_KEY` and `TRELLO_TOKEN`: the same API key and token you use in Sprint Kit.
    - `TRELLO_BOARD_ID`: shown in Sprint Kit on Step 2b once you pick a board (with a Copy button).
 4. Name branches `feature/US-07-short-name` and start PR titles with the ID: `US-07: UNIMAS login`.
+
+With the action, the settings are `with:` inputs instead of `env:` lines: `card-prefix`, `merge-base`, `lists` (the `TRELLO_LISTS` JSON) and `dry-run: "true"`.
 
 ## Your list names
 

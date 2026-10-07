@@ -1,0 +1,48 @@
+name: Trello card sync
+description: Move Trello cards when GitHub branches and pull requests change, and attach the PR and CI result to the card.
+author: Boci0
+branding:
+  icon: git-pull-request
+  color: blue
+
+inputs:
+  trello-key:
+    description: Trello API key.
+    required: true
+  trello-token:
+    description: Trello API token.
+    required: true
+  trello-board-id:
+    description: Id of the Trello board that holds your cards.
+    required: true
+  card-prefix:
+    description: 'Story ID prefix used in card titles, branch names and PR titles. Several allowed, comma separated, for example "FR,US".'
+    required: false
+    default: US
+  merge-base:
+    description: Only move a card to Testing when the PR is merged into this branch. Empty means any branch.
+    required: false
+    default: ''
+  lists:
+    description: 'JSON that maps stages to list names or ids, for boards with unusual list names. Example: {"doing":"Hacking"}'
+    required: false
+    default: ''
+  dry-run:
+    description: 'Set to "true" to log what would change without touching Trello.'
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Sync Trello card
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/trello-sync.mjs"
+      env:
+        TRELLO_KEY: ${{ inputs.trello-key }}
+        TRELLO_TOKEN: ${{ inputs.trello-token }}
+        TRELLO_BOARD_ID: ${{ inputs.trello-board-id }}
+        CARD_PREFIX: ${{ inputs.card-prefix }}
+        MERGE_BASE: ${{ inputs.merge-base }}
+        TRELLO_LISTS: ${{ inputs.lists }}
+        DRY_RUN: ${{ inputs.dry-run == 'true' && '1' || '' }}

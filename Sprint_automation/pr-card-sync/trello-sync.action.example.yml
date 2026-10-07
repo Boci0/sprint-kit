@@ -1,0 +1,28 @@
+# Copy this file to  .github/workflows/trello-sync.yml  in your team's code repository.
+# No script to copy: the action does the work. See README.md.
+name: Trello card sync
+
+on:
+  create:                      # a branch such as feature/US-07-login is created
+  pull_request:
+    types: [opened, reopened, ready_for_review, closed]
+  workflow_run:                # comment the CI result on the card
+    workflows: ["CI"]          # must match the `name:` of your CI workflow
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Boci0/sprint-kit/Sprint_automation/pr-card-sync@main
+        with:
+          trello-key: ${{ secrets.TRELLO_KEY }}
+          trello-token: ${{ secrets.TRELLO_TOKEN }}
+          trello-board-id: ${{ secrets.TRELLO_BOARD_ID }}
+          # card-prefix: FR          # your story ID prefix (default US). Several: "FR,US"
+          # merge-base: develop      # only move to Testing when merged into this branch
+          # dry-run: "true"          # log what would happen without changing Trello
+          # lists: '{"doing": "Hacking"}'
