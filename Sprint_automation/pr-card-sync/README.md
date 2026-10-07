@@ -1,6 +1,6 @@
 # PR to card sync
 
-Keeps your Trello board in step with GitHub, so nobody has to drag cards by hand (this is the "From card to merged code" flow on p.19 of the Trello 101 deck).
+Keeps your Trello board in step with GitHub, so nobody has to drag cards by hand.
 
 | In GitHub | What happens to the Trello card |
 |---|---|
@@ -33,13 +33,13 @@ The card is found from the ID (`US-07`) in the **branch name or the PR title**, 
 3. In the repo go to **Settings → Secrets and variables → Actions** and add three secrets:
    - `TRELLO_KEY` and `TRELLO_TOKEN`: the same API key and token you use in Sprint Kit.
    - `TRELLO_BOARD_ID`: shown in Sprint Kit on Step 2b once you pick a board (with a Copy button).
-4. Name branches `feature/US-07-short-name` and start PR titles with the ID: `US-07: UNIMAS login`.
+4. Name branches `feature/US-07-short-name` and start PR titles with the ID: `US-07: Add login`.
 
 With the action, the settings are `with:` inputs instead of `env:` lines: `card-prefix`, `merge-base`, `lists` (the `TRELLO_LISTS` JSON) and `dry-run: "true"`.
 
 ## Your list names
 
-The job works out what each list is from its name, so the deck's template works, and so do most other boards. Some examples it understands:
+The job works out what each list is from its name, so common Trello templates work, and so do most other boards. Some examples it understands:
 
 | Stage | Names it recognises |
 |---|---|
@@ -63,10 +63,10 @@ Add `DRY_RUN: "1"` to the workflow's `env:`. The job reads your board but only p
 
 ## Things to know
 
-- **Comments appear as the token's owner.** Everything the job does shows up as coming from whoever created the token. A shared team account, or the Scrum Master's, is better than one student's personal account.
+- **Comments appear as the token's owner.** Everything the job does shows up as coming from whoever created the token. A shared team account, or the Scrum Master's, is better than one person's personal account.
 - **Treat the token like a password.** Only add this to a repo where every collaborator is trusted: anyone who can push a branch can change the workflow or script and read the secrets.
 - **Pull requests from forks don't get secrets**, so the job skips them. That's expected.
-- **Only real events move cards.** A card moves only when something really happens in GitHub, so the board's history stays accurate for marking (deck p.24). Moves like "Testing → Done" stay with the Product Owner and the client at the Review.
+- **Only real events move cards.** A card moves only when something really happens in GitHub, so the board's history stays accurate. Moves like "Testing → Done" stay with the Product Owner and the client at the Review.
 - **Needs Node 18+.** GitHub's `ubuntu-latest` runners include it.
 
 ## Tests

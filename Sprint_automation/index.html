@@ -236,7 +236,7 @@ const stampTime=d=>{try{return d.toLocaleTimeString(loc(),hourOpt())}catch(e){re
 /* Story fields. The built-in fields can be hidden or renamed, and a team can add its own: short text, long text, number, date or a choice.
    A hidden field keeps its data. Values of your own fields are stored on the story under `extra`. */
 const BUILTIN_FIELDS={
-  role:{label:'Who is it for?',hint:'e.g. a student'},
+  role:{label:'Who is it for?',hint:'e.g. a customer'},
   want:{label:'What do they want to do?',hint:''},
   why:{label:'Why?',hint:'the benefit'},
   ac:{label:"How do we know it's done?",hint:'one line each'},
@@ -508,7 +508,7 @@ function pWrite(){
   <div class="panel">
     <h2>${editing!==null?'Edit '+esc(s.id):'Add a story'}</h2>
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(110px,170px);gap:10px;align-items:end">
-      <div><label>Story title <small>short, e.g. “Log in with UNIMAS email”</small></label>
+      <div><label>Story title <small>short, e.g. “Log in with email”</small></label>
         <input id="f-title" value="${esc(s.title)}"></div>
       <div><label>ID <small>${idLocked?'already on Trello':'optional'}</small></label>
         <input id="f-id" value="${esc(editing!==null?s.id:'')}" placeholder="${esc(editing!==null?s.id:nextId())}" ${idLocked?'disabled':''} autocomplete="off" title="${idLocked?'This story has a card on Trello, so its ID stays.':'Leave empty to number automatically, or type your own, like FR-AI-01.'}"></div>
@@ -1359,7 +1359,7 @@ function bind(){
     $('#dt-reset').onclick=()=>{const next={...(S.settings||{})};delete next.dates;S.settings=next;save();keepForm(render)};
   }
   if($('#card-title')){
-    const sample=()=>S.stories[0]||{id:nextId(),title:'Log in with UNIMAS email',role:'a student',want:'to log in with my email',why:'my data stays private',ac:'Given a valid account, when I log in, then I see Home in 2 seconds\nGiven a wrong password, when I log in, then I see an error',points:'5',pri:defPri('form'),owner:'Aina',tasks:'',list:'',due:''};
+    const sample=()=>S.stories[0]||{id:nextId(),title:'Log in with email',role:'a customer',want:'to log in with my email',why:'my data stays private',ac:'Given a valid account, when I log in, then I see Home in 2 seconds\nGiven a wrong password, when I log in, then I see an error',points:'5',pri:defPri('form'),owner:'Aina',tasks:'',list:'',due:''};
     const prev=()=>{
       const t=$('#card-title').value,d=$('#card-desc').value,st=sample(),bad=titleProblem(t),unk=unknownFields(t+'\n'+d);
       $('#card-prev').textContent=renderTitle(t,st)+'\n\n'+renderDesc(d,storyVals(st));

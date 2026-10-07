@@ -35,13 +35,13 @@ const logs = [];
 const log = (x) => logs.push(x);
 const pr = (action, extra = {}) => ({
   action,
-  pull_request: { number: 23, title: 'US-07: UNIMAS login', html_url: 'https://gh/pr/23', head: { ref: 'feature/US-07-unimas-login' },
+  pull_request: { number: 23, title: 'US-07: login', html_url: 'https://gh/pr/23', head: { ref: 'feature/US-07-login' },
     base: { ref: 'develop' }, user: { login: 'alice' }, merged: false, draft: false, ...extra },
 });
 const moves = (b) => b.writes.filter((w) => w[0] === 'PUT').map((w) => w[2].idList);
 
 test('card IDs are read from branch names and titles', () => {
-  assert.deepEqual(extractIds('feature/US-07-unimas-login', 'US-07: login'), [7]);
+  assert.deepEqual(extractIds('feature/US-07-login', 'US-07: login'), [7]);
   assert.deepEqual(extractIds('US-1 and us-12, US-001'), [1, 12]);
   assert.deepEqual(extractIds('FIXUS-07', 'business-07', null), []);
 });
@@ -174,7 +174,7 @@ test('DRY_RUN reads Trello but writes nothing', async () => {
 
 test('CI result is posted as a comment only', async () => {
   const b = board([[7, 'rv']]);
-  const ev = { workflow_run: { name: 'CI', conclusion: 'failure', html_url: 'https://gh/run/1', head_branch: 'feature/US-07-unimas-login', display_title: 'US-07: UNIMAS login' } };
+  const ev = { workflow_run: { name: 'CI', conclusion: 'failure', html_url: 'https://gh/run/1', head_branch: 'feature/US-07-login', display_title: 'US-07: login' } };
   await run({ env: ENV, eventName: 'workflow_run', event: ev, fetchImpl: b.fetchImpl, log });
   assert.deepEqual(moves(b), []);
   assert.match(b.writes[0][2].text, /CI "CI" failure/);

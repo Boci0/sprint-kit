@@ -2,7 +2,7 @@
 
 Write your sprint's user stories once, then get them onto your Trello board as finished cards: description, acceptance criteria, due date, priority label, owner and checklist already filled in. It works with any Trello board.
 
-Trello already has templates and CSV import. What this adds is the course workflow in one place: a fixed story format (role, want, why, criteria, tasks), a Review report that reads the board, and a PR sync that moves cards for you. Not on Trello? Export the stories as a CSV laid out for Jira, Linear or Notion.
+Trello already has templates and CSV import. What this adds is a complete sprint workflow in one place: a fixed story format (role, want, why, criteria, tasks), a Review report that reads the board, and a PR sync that moves cards for you. Not on Trello? Export the stories as a CSV laid out for Jira, Linear or Notion.
 
 <p align="center">
   <a href="https://github.com/Boci0/sprint-kit/releases/latest"><img alt="Download the Windows installer" src="https://img.shields.io/badge/Download-Windows%20installer-2563eb?style=for-the-badge&logo=windows&logoColor=white"></a>
