@@ -5,10 +5,16 @@ Write your sprint's user stories once, then get them onto your Trello board as f
 Trello already has templates and CSV import. What this adds is a complete sprint workflow in one place: a fixed story format (role, want, why, criteria, tasks), a Review report that reads the board, and a PR sync that moves cards for you. Not on Trello? Export the stories as a CSV laid out for Jira, Linear or Notion.
 
 <p align="center">
-  <a href="https://github.com/Boci0/sprint-kit/releases/latest"><img alt="Download the Windows installer" src="https://img.shields.io/badge/Download-Windows%20installer-2563eb?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/Boci0/sprint-kit/releases/latest"><img alt="Download the installer for Windows, macOS or Linux" src="https://img.shields.io/badge/Download-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-2563eb?style=for-the-badge"></a>
 </p>
 
-On the page that opens, download the file ending in `x64-setup.exe` and run it. No account, Node, Rust or Git needed. (Windows may say "Windows protected your PC" because the installer isn't code-signed: click **More info**, then **Run anyway**.)
+On the page that opens, download the file for your system and run it. No account, Node, Rust or Git needed.
+
+- **Windows:** the file ending in `x64-setup.exe`. Windows may say "Windows protected your PC" because the installer isn't code-signed: click **More info**, then **Run anyway**.
+- **macOS:** the `.dmg` (`aarch64` for Apple silicon, `x64` for Intel). The app isn't signed, so right-click it and choose **Open** the first time.
+- **Linux:** the `.AppImage` (run `chmod +x` on it first) or the `.deb`. Saving the key needs a keyring such as GNOME Keyring or KWallet.
+
+The macOS and Linux builds are new and less tested than the Windows one. Please report problems.
 
 <p align="center">
   <img alt="A short demo: write stories, push them to Trello, move cards, read the report and close the sprint" src="https://raw.githubusercontent.com/Boci0/sprint-kit/main/Sprint_automation/docs/demo.gif" width="900">
@@ -38,7 +44,7 @@ On the page that opens, download the file ending in `x64-setup.exe` and run it. 
 
 *The screenshots use made-up sample data.*
 
-Your Trello key and token are stored in **Windows Credential Manager** in the desktop app.
+Your Trello key and token are stored in your system keychain in the desktop app (Windows Credential Manager, macOS Keychain, or the Linux Secret Service).
 
 ## Where to go next
 

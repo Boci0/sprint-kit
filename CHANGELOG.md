@@ -3,6 +3,7 @@
 Releases are tagged `sprintkit-vX.Y.Z`. Download them from the [Releases page](https://github.com/Boci0/sprint-kit/releases).
 
 ## Unreleased
+- Desktop builds for macOS (Apple silicon and Intel) and Linux (AppImage and deb). The key and token are kept in the macOS Keychain or the Linux Secret Service. These builds are untested so far.
 - PR sync is now a reusable GitHub Action: `Boci0/sprint-kit/Sprint_automation/pr-card-sync`.
 - Sample stories, tests and docs no longer mention a specific course.
 

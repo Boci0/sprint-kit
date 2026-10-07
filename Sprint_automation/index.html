@@ -745,7 +745,7 @@ function pCopy(){
 const TK='sprintkit.trello';
 let T=(()=>{try{return JSON.parse(localStorage.getItem(TK))||{}}catch(e){return{}}})();
 let TB={boards:[],lists:[],labels:[],members:[],msg:'',busy:false};
-// In the desktop app the key and token live in Windows Credential Manager, not in local storage.
+// In the desktop app the key and token live in the system keychain (Windows Credential Manager, macOS Keychain, Linux Secret Service), not in local storage.
 const SECURE=!!(window.__TAURI__&&window.__TAURI__.core);
 let secureOK=false;
 const inv=(c,a)=>window.__TAURI__.core.invoke(c,a);
@@ -756,7 +756,7 @@ const saveT=()=>{try{
 async function persistSecrets(){
   if(!secureOK)return;
   try{for(const n of['key','token'])T[n]?await inv('secret_set',{name:n,value:T[n]}):await inv('secret_delete',{name:n})}
-  catch(e){secureOK=false;TB.msg='⚠ Could not use Windows Credential Manager ('+e+'); the key stays in app storage.'}
+  catch(e){secureOK=false;TB.msg='⚠ Could not use the system keychain ('+e+'); the key stays in app storage.'}
 }
 async function initSecure(){
   if(!SECURE)return;
@@ -767,7 +767,7 @@ async function initSecure(){
     if(!legacy){T.key=stored.key||'';T.token=stored.token||''}
     await persistSecrets();
     saveT();render();
-  }catch(e){secureOK=false;TB.msg='⚠ Could not use Windows Credential Manager ('+e+'); the key stays in app storage.';render()}
+  }catch(e){secureOK=false;TB.msg='⚠ Could not use the system keychain ('+e+'); the key stays in app storage.';render()}
 }
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
@@ -976,7 +976,7 @@ function pPush(){
         <li>On that page click the <b>Token</b> link, <b>Allow</b>, and copy the token.</li>
       </ol>
       <div class="two"><div><label>API key</label><input id="t-key" type="password" value="${esc(T.key||'')}" autocomplete="off"></div>
-        <div><label>Token <small>${secureOK?'saved in Windows Credential Manager':'stays in this browser only, so keep it private'}</small></label><input id="t-token" type="password" value="${esc(T.token||'')}" autocomplete="off"></div></div>
+        <div><label>Token <small>${secureOK?'saved in the system keychain':'stays in this browser only, so keep it private'}</small></label><input id="t-token" type="password" value="${esc(T.token||'')}" autocomplete="off"></div></div>
       <div class="big"><button class="btn p" id="connect">Connect</button><button class="btn link" id="forget">Forget key &amp; token</button></div>
     </details>
     ${TB.msg?`<p class="mute" style="margin:8px 0 0">${esc(TB.msg)}</p>`:''}

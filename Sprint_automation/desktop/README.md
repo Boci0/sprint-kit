@@ -1,6 +1,6 @@
 # Sprint Kit desktop app (Tauri)
 
-Wraps `../index.html` as a Windows app. `sync.js` copies that file into `dist/` at build time.
+Wraps `../index.html` as a desktop app for Windows, macOS and Linux. The release workflow builds all three on GitHub, so you only need a local build for development. `sync.js` copies that file into `dist/` at build time.
 
 ## Updates
 

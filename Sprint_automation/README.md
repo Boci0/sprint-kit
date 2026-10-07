@@ -4,17 +4,18 @@ Write your user stories once, then get them into Trello as cards: with the descr
 
 ## Download
 
-**[Download the latest Windows installer](https://github.com/Boci0/sprint-kit/releases/latest)**
+**[Download the latest installer](https://github.com/Boci0/sprint-kit/releases/latest)**
 
-Open that page and, under **Assets**, download the file ending in `x64-setup.exe`. Then run it.
+Open that page and, under **Assets**, download the file for your system and run it: `x64-setup.exe` for Windows, the `.dmg` for macOS, or the `.AppImage` / `.deb` for Linux. The macOS and Linux builds are new and less tested than Windows.
 
 - This repository is public, so you do not need a GitHub account to download the installer.
 - Windows may show **"Windows protected your PC"** because the installer is not code-signed. Click **More info**, then **Run anyway**.
+- On macOS the app is not signed: right-click it and choose **Open** the first time. On Linux, make the AppImage executable first (`chmod +x`).
 - You do not need to install Node, Rust or Git. Windows 10 and 11 already include what the app needs.
 
 **Updates:** from version 0.2.0 the app checks for a newer version when it opens and offers a one-click update. There is also a **Check for updates** link at the bottom of the window. Older installs need the new installer once.
 
-Prefer the browser? Open `index.html` in this folder. It does the same job, but stores the Trello token in the browser instead of Windows Credential Manager.
+Prefer the browser? Open `index.html` in this folder. It does the same job, but stores the Trello token in the browser instead of the system keychain.
 
 ## One-time Trello setup
 
@@ -79,7 +80,7 @@ tasks: add one line for each task
 
 ## Your token
 
-- In the Windows app, the key and token are stored in **Windows Credential Manager** (look for `SprintKit`).
+- In the desktop app, the key and token are stored in your system keychain (Windows Credential Manager, macOS Keychain or the Linux Secret Service, such as GNOME Keyring). Look for `SprintKit`.
 - **Forget key & token** on Step 2b removes them. To cancel a token completely, revoke it in your Trello account or generate a new API key.
 - Never commit or share the token. Anyone who has it can read and change everything in your Trello account.
 
@@ -90,5 +91,5 @@ tasks: add one line for each task
 ## For developers
 
 - `index.html` is the whole app (HTML, CSS and JavaScript in one file).
-- `desktop/` wraps it as a Windows app with Tauri. See [desktop/README.md](desktop/README.md) for building and for publishing a release.
+- `desktop/` wraps it as a desktop app (Windows, macOS, Linux) with Tauri. See [desktop/README.md](desktop/README.md) for building and for publishing a release.
 - Pushing a tag like `sprintkit-v0.1.1` builds the installer on GitHub and attaches it to a release.
