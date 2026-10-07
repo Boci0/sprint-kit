@@ -6,7 +6,7 @@ Write your user stories once, then get them into Trello as cards: with the descr
 
 **[Download the latest installer](https://github.com/Boci0/sprint-kit/releases/latest)**
 
-Open that page and, under **Assets**, download the file for your system and run it: `x64-setup.exe` for Windows, the `.dmg` for macOS, or the `.AppImage` / `.deb` for Linux. The macOS and Linux builds are new and less tested than Windows.
+Open that page and, under **Assets**, download the file for your system and run it: `x64-setup.exe` for Windows, the `.dmg` for macOS (Apple silicon only), or the `.AppImage` / `.deb` for Linux. The macOS and Linux builds are new and less tested than Windows.
 
 - This repository is public, so you do not need a GitHub account to download the installer.
 - Windows may show **"Windows protected your PC"** because the installer is not code-signed. Click **More info**, then **Run anyway**.

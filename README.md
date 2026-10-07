@@ -11,7 +11,7 @@ Trello already has templates and CSV import. What this adds is a complete sprint
 On the page that opens, download the file for your system and run it. No account, Node, Rust or Git needed.
 
 - **Windows:** the file ending in `x64-setup.exe`. Windows may say "Windows protected your PC" because the installer isn't code-signed: click **More info**, then **Run anyway**.
-- **macOS:** the `.dmg` (`aarch64` for Apple silicon, `x64` for Intel). The app isn't signed, so right-click it and choose **Open** the first time.
+- **macOS:** the `.dmg`, for Apple silicon Macs only (not Intel). The app isn't signed, so right-click it and choose **Open** the first time.
 - **Linux:** the `.AppImage` (run `chmod +x` on it first) or the `.deb`. Saving the key needs a keyring such as GNOME Keyring or KWallet.
 
 The macOS and Linux builds are new and less tested than the Windows one. Please report problems.

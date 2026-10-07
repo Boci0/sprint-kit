@@ -31,11 +31,6 @@ jobs:
             args: --target aarch64-apple-darwin --bundles dmg,app
             target: aarch64-apple-darwin
             bundle: dmg/*.dmg
-          - name: macos-intel
-            os: macos-13
-            args: --target x86_64-apple-darwin --bundles dmg,app
-            target: x86_64-apple-darwin
-            bundle: dmg/*.dmg
           - name: linux
             os: ubuntu-22.04
             args: --bundles appimage,deb
